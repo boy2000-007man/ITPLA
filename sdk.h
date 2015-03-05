@@ -5,34 +5,36 @@
 #include <cassert>
 #include <cmath>
 #include <ctime>
-#define Point pair<double, double>
+#include <cstdio>
+#include <Box2D/Box2D.h>
+#define Point b2Vec2
 #define Points vector<Point >
 #define Vector Point
 #define Vectors Points
-#define x first
-#define y second
 #define ZERO 1e-9
-#define show_time() printf("[%.3lf]", (double)clock() / CLK_TCK)
-#define to_rad(x) ((x) / 180.0 * 3.1415926535)
-#define to_arc(x) ((x) * 180.0 / 3.1415926535)
-#define length(v) sqrt(pow(v.x, 2) + pow(v.y, 2))
+#define CURRENT_TIME (10.0 * clock() / CLOCKS_PER_SEC)
+#define show_time() printf("[%.3lf]", CURRENT_TIME)
+#define pi b2_pi
+#define to_rad(x) ((x) / 180.0 * pi)
+#define to_arc(x) ((x) * 180.0 / pi)
 
 namespace sdk {
 using namespace std;
 
 Points test() {
     Points polygon;
-    polygon.push_back(make_pair(0, 0));
-    polygon.push_back(make_pair(400, 0));
-    polygon.push_back(make_pair(300, 300));
-//    polygon.push_back(make_pair(200, 175));
-    polygon.push_back(make_pair(0, 50));
+    polygon.push_back(Point(0, 50));
+    polygon.push_back(Point(0, 0));
+//    polygon.push_back(Point(600, -100));
+    polygon.push_back(Point(400, 0));
+    polygon.push_back(Point(300, 300));
+//    polygon.push_back(Point(200, 175));
     return polygon;
 }
 
 Point rand_point(const Point &plb, const Point &prt) {
     assert(plb.x <= prt.x && plb.y <= prt.y);
-    return make_pair((prt.x - plb.x) * rand() / RAND_MAX + plb.x, (prt.y - plb.y) * rand() / RAND_MAX + plb.y);
+    return Point((prt.x - plb.x) * rand() / RAND_MAX + plb.x, (prt.y - plb.y) * rand() / RAND_MAX + plb.y);
 }
 
 double normalize_angle(double angle) {  //-180~+180
@@ -44,14 +46,18 @@ double normalize_angle(double angle) {  //-180~+180
     return angle;
 }
 
+double angle_diff(double init, double fin) {
+    return normalize_angle(fin - init);
+}
+
 double distance_to_line(const Point &p, const Point &u, const Point &v) {
-    Vector e1 = make_pair(u.x - v.x, u.y - v.y),
-           e2 = make_pair(p.x - v.x, p.y - v.y);
-    return abs(e1.x * e2.y - e1.y * e2.x) / length(e1);
+    Vector e1 = u - v,
+           e2 = p - v;
+    return abs(e1.x * e2.y - e1.y * e2.x) / e1.Length();
 }
 
 Point normalize_point(const Point &p, const double edge_length) {
-    return make_pair(p.x / edge_length, p.y / edge_length);
+    return Point(p.x / edge_length, p.y / edge_length);
 }
 
 Points normalize_polygon(const Points &polygon, const double edge_length) {
@@ -64,7 +70,6 @@ Points normalize_polygon(const Points &polygon, const double edge_length) {
 bool in_polygon(const Points &polygon/*normalized_polygon*/, const Point &p/*normalized_point*/) {
     bool result = false;
     for (int i = 0; i < polygon.size(); i++) {
-        //printf("result = %d, check edge[%d] start...\n", result, i);
         const Point &p1 = polygon[i],
                     &p2 = polygon[(i + 1) % polygon.size()];
         if ((p1.y - p.y) * (p2.y - p.y) <= 0
@@ -75,79 +80,175 @@ bool in_polygon(const Points &polygon/*normalized_polygon*/, const Point &p/*nor
                 return true;
             else
                 result = !result;
-        /*printf("p = (%lf, %lf), p1 = (%lf, %lf), p2 = (%lf, %lf)\n", p.x,p.y,p1.x,p1.y,p2.x,p2.y);
-        printf("%lf\n", (p1.y - p.y) * (p2.y - p.y));
-        printf("%lf\n", abs(p1.y - p2.y));
-        printf("%lf\n", abs(p.y - p1.y));
-        printf("tmp = %.24lf\n", p1.x + (p.y - p1.y) * (p1.x - p2.x) / (p1.y - p2.y));*/
     }
-    /*printf("final result = %d\n", result);
-    if (result != (0 <= p.x && p.x <= 100 && 0 <= p.y && p.y <= 100)) {
-        printf("(%.24lf, %.24lf) ERROR\n", p.x, p.y);
-        exit(0);
-    }*/
     return result;
 }
 
-Point move_in_polygon(const Points &normalized_polygon, const Point &p, const Vector &v) {
-    const double v_length = sqrt(pow(v.x, 2) + pow(v.y, 2));
-    if (v_length < ZERO)
-        return p;
-    //printf("P(%lf, %lf) V(%lf, %lf)\n", p.x, p.y, v.x, v.y);
-    if (!in_polygon(normalized_polygon, p)) {
-        printf("(%.16lf, %.16lf) not in polygon.\n", p.x, p.y);
-        exit(0);
-    } //else
-        //printf("(%.24lf, %.24lf) in polygon.", p.x, p.y);
-    assert(in_polygon(normalized_polygon, p));
-    double t = 1;
-    Vector vn = make_pair(0, 0);
-    Point pn = make_pair(p.x + v.x, p.y + v.y);
-    for (int i = 0; i < normalized_polygon.size(); i++) {
-        const Point &p1 = normalized_polygon[i],
-                    &p2 = normalized_polygon[(i + 1) % normalized_polygon.size()];
-        Vector e12 = make_pair(p2.x - p1.x, p2.y - p1.y),
-               e = make_pair(p.x - p1.x, p.y - p1.y),
-               en = make_pair(pn.x - p1.x, pn.y - p1.y);
-        double n = (e12.x * e.y - e12.y * e.x) * (e12.x * en.y - e12.y * en.x);
-        if (abs(v.x * e12.y - v.y * e12.x) < ZERO) {
-            //printf("case 1\n");
-        } else if (n < 0) {
-            //printf("case 2\n");
-            double t_ = ((p.y - p1.y) * e12.x - (p.x - p1.x) * e12.y) / (v.x * e12.y - v.y * e12.x);
-            assert(0 <= t_);
-            if (t_ < t) {
-                t = t_;
-                double vnl = (e12.x * v.x + e12.y * v.y) * (1 - t) / (pow(e12.x, 2) + pow(e12.y, 2));
-                vn = make_pair(vnl * e12.x, vnl * e12.y);
-            }
-        } else if (n < ZERO) {
-            //printf("case 3\n");
-            Vector e12 = make_pair(p2.x - p1.x, p2.y - p1.y);
-            //printf("e12:(%lf, %lf), e:(%lf, %lf)\n", e12.x, e12.y, e.x, e.y);
-            if (0 < e12.x * v.y - e12.y * v.x)
+double K;
+int frame;
+void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *> &points) {
+    assert(0 < points.size());
+
+    vector<vector<int> > nearest_point(points.size(), vector<int>(3, -1));
+
+    for (int i = 0; i < points.size(); i++) {
+        b2Body *p1 = points[i];
+
+        for (int j = 0; j < points.size(); j++) {
+            b2Body *p2 = points[j];
+
+            if (i == j)
                 continue;
-            t = 0;
-            double vnl = (e12.x * v.x + e12.y * v.y) * (1 - t) / (pow(e12.x, 2) + pow(e12.y, 2));
-            vn = make_pair(vnl * e12.x, vnl * e12.y);
+
+            Vector v = p2->GetPosition() - p1->GetPosition();
+            int k = -1;
+            for (int l = 0; l < 3; l++) {
+                double tmp = normalize_angle(to_arc(p1->GetAngle()) + 120 * l);
+                Vector n = Point(sin(to_rad(tmp)), cos(to_rad(tmp)));
+                if (cos(to_rad(60)) * v.Length() <= v.x * n.x + v.y * n.y)
+                    k = l;
+            }
+            assert(k != -1);
+            if (nearest_point[i][k] == -1)
+                nearest_point[i][k] = j;
+            else {
+                b2Body *p3 = points[nearest_point[i][k]];
+                if (v.Length() < (p1->GetPosition() - p3->GetPosition()).Length())
+                    nearest_point[i][k] = j;
+            }
         }
     }
-    //if (ZERO < abs(t - 1))
-        //t *= (1 - ZERO);
-        //t -= ZERO;
-    if (ZERO < t)
-        t -= ZERO;
-    else
-        t = 0;
-    pn = make_pair(p.x + v.x * t, p.y + v.y * t);
-    return move_in_polygon(normalized_polygon, pn, vn);
+
+    Vectors force(points.size(), Point(0, 0));
+    vector<double> angle(points.size(), 0);
+
+    K = 1;
+    int K_n = -1;
+    for (int i = 0; i < points.size(); i++) {
+        b2Body *p1 = points[i];
+
+        double weight_sum = 0;
+
+        for (int k = 0; k < 3; k++) {
+            const double ak = to_arc(p1->GetAngle()) + k * 120;
+
+            if (nearest_point[i][k] != -1) {
+                const int &j = nearest_point[i][k];
+                b2Body *p2 = points[j];
+
+                Vector v = p2->GetPosition() - p1->GetPosition(),
+                       n = Point(sin(to_rad(ak)), cos(to_rad(ak))),
+                       t = Point(sin(to_rad(ak + 90)), cos(to_rad(ak + 90)));
+
+                Point p1_line_middle = 0.5 * n;
+                int l = -1;
+                for (int m = 0; m < 3 && l == -1; m++) {
+                    if (abs(angle_diff(ak, to_arc(p2->GetAngle()) + m * 120 + 180)) <= 60)
+                        l = m;
+                }
+                assert(l != -1);
+//                double dii = INT_MAX;
+//                for (int l = 0; l < 3; l++) {
+//                    Point p2_line_middle = v + 0.5 * Point(sin(to_rad(120 * l) + p2->GetAngle()), cos(to_rad(120 * l) + p2->GetAngle()));
+//                    if ((p1_line_middle - p2_line_middle).Length() < dii) {
+//                        dii = (p1_line_middle - p2_line_middle).Length();
+//                        min12 = l;
+//                    }
+//                }
+                Point p2_line_middle = v + 0.5 * Point(sin(to_rad(120 * l) + p2->GetAngle()), cos(to_rad(120 * l) + p2->GetAngle()));
+                double ang_diff = angle_diff(ak, to_arc(p2->GetAngle()) + l * 120 + 180);
+
+                double min_distance = 0.5 + sin(to_rad(30 + abs(ang_diff)));
+                double v_n_length = v.x * n.x + v.y * n.y,
+                       v_t_length = v.x * t.x + v.y * t.y,
+                       kn = 1 - pow(v_n_length / min_distance, -2),
+                       kt = 0.5 * v_t_length / v_n_length / sqrt(3) * min(1.0, pow(v_n_length / min_distance, -2)) * cos(to_rad(ang_diff));
+                assert(0 <= v_n_length);
+                double weight = pow(v_n_length / min_distance, -2) + pow((p1_line_middle - p2_line_middle).Length() + 0.1, -2);
+                force[i] += weight * (kn * n + kt * t);
+                angle[i] += ang_diff / 2 * weight;
+                weight_sum += weight;
+                if (v_n_length / min_distance /** cos(to_rad(ang_diff))*/ < K) {
+                    K = v_n_length / min_distance;
+                    K_n = i;
+                }
+                if (cos(to_rad(ang_diff)) < 0)
+                    printf("%lf\n", ang_diff);
+            }
+        }
+
+        for (int j = 0; j < normalized_polygon.size(); j++) {
+            const Point &u = normalized_polygon[j],
+                        &v = normalized_polygon[(j + 1) % normalized_polygon.size()],
+                        &w = normalized_polygon[(j + 2) % normalized_polygon.size()];
+            Vector e1 = u - v,
+                   e2 = v - w;
+            double dis = distance_to_line(p1->GetPosition(), u, v);
+            Vector n = Point(u.y - v.y, v.x - u.x);
+            int k = -1;
+            double min_dist = INT_MAX;
+            for (int l = 0; l < 3; l++) {
+                const double al = normalize_angle(to_arc(p1->GetAngle()) + l * 120);
+                Point t = p1->GetPosition() + 0.5 * Point(sin(to_rad(al)), cos(to_rad(al)));
+                double dist = distance_to_line(t, u, v);
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    k = l;
+                }
+            }
+            assert(k != -1);
+            double ang_diff = angle_diff(to_arc(p1->GetAngle()) + k * 120, 180 - to_arc(atan2(v.y - u.y, v.x - u.x)));
+            double min_distance = sin(to_rad(30 + abs(ang_diff)));
+            double kn = 1 - pow(dis / min_distance, -2);
+            if (0 < kn)
+                continue;
+            assert(ZERO < abs(n.Normalize()));
+            double weight = pow(min_dist + 0.2, -2);
+            force[i] -= weight * kn * n;
+            angle[i] += ang_diff * weight;
+            weight_sum += weight;
+            if (dis / min_distance < K) {
+                K = dis / min_distance;
+                K_n = i;
+            }
+        }
+        if (ZERO < weight_sum) {
+            force[i] *= 1 / weight_sum;
+            angle[i] /= weight_sum;
+        }
+    }
+
+    for (int i = 0; i < points.size(); i++) {
+        b2Body *p = points[i];
+        p->SetLinearVelocity(force[i]);
+        p->SetAngularVelocity(to_rad(angle[i]));
+    }
+
+    frame++;
+    if (frame > 100 && frame--)
+        for (int i = 0; i < points.size(); i++) {
+            b2Body *p = points[i];
+            p->SetLinearVelocity(Vector(0, 0));
+            p->SetAngularVelocity(0);
+        }
+    if (frame % 2000 == 0 && K_n != -1 && K < 0.9) {
+        points.back()->GetWorld()->DestroyBody(points[K_n]);
+        points[K_n] = points.back();
+        points.pop_back();
+        for (int i = 0; i < points.size(); i++) {
+            b2Body *p = points[i];
+            p->SetLinearVelocity(Vector(0, 0));
+            p->SetAngularVelocity(0);
+        }
+    }
 }
 
-pair<Points, vector<double> > place(const Points &polygon, double edge_length) {
+vector<b2Body *>/*pair<Points, vector<double> >*/ place(const Points &polygon, double edge_length) {
     assert(2 < polygon.size());
     const Points normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));
 
-    printf("start place\n");
+    show_time();
+    printf("start place ...\n");
     Point plb = normalized_polygon[0],
           prt = normalized_polygon[0];
     for (int i = 1; i < normalized_polygon.size(); i++) {
@@ -159,9 +260,8 @@ pair<Points, vector<double> > place(const Points &polygon, double edge_length) {
     }
     printf("(%lf, %lf)<->(%lf, %lf)\n", plb.x, plb.y, prt.x, prt.y);
 
-    const int xxx = -1;
-    time_t stime = 1425350902;-1;1425207538;1425215711;//-1;1425214647;-1;1425210080;//1425208981;//1425207950;//1425207538;
-    //1425196251;
+    const int xxx = 3;-1;10;
+    time_t stime = 1425560927;
     stime = (stime != -1 ? stime : time(NULL));
     srand(stime);//time(NULL));
     int total = 0xfff,
@@ -171,256 +271,56 @@ pair<Points, vector<double> > place(const Points &polygon, double edge_length) {
     double area = (prt.x - plb.x) * (prt.y - plb.x) * inside / total;
     printf("approximate area = %.6lf\n", area);
 
+    show_time();
+    printf("create world ...\n", area);
+    Vector gravity(0, 0);
+    b2World *world = new b2World(gravity);
+
+    b2BodyDef border_def;
+    border_def.position.Set(0, 0);
+    b2Body *border = world->CreateBody(&border_def);
+    for (int i = 0; i < normalized_polygon.size(); i++) {
+        const Point &u = normalized_polygon[i],
+                    &v = normalized_polygon[(i + 1) % normalized_polygon.size()];
+        b2EdgeShape border_edge_shape;
+        border_edge_shape.Set(u, v);
+        border->CreateFixture(&border_edge_shape, 0);
+    }
+
     int point_number = xxx == -1 ? int(area / (3 * sqrt(3) / 4)) : xxx;
-    Points point_set;
-    vector<double> angle_set;
-    for (int i = 0; i < point_number; i++) {
+    vector<b2Body *> points(point_number, NULL);
+    for (int i = 0; i < points.size(); i++) {
         Point p;
         while (!in_polygon(normalized_polygon, p = rand_point(plb, prt)));
-        point_set.push_back(p);
-        angle_set.push_back(normalize_angle(360.0 * rand() / RAND_MAX));
+
+        b2BodyDef point_def;
+        point_def.type = b2_dynamicBody;
+        point_def.position.Set(p.x, p.y);
+        point_def.angle = 2 * pi * rand() / RAND_MAX;
+        points[i] = world->CreateBody(&point_def);
+        b2CircleShape point_shape;
+        point_shape.m_p.Set(0, 0);
+        point_shape.m_radius = 0.1;
+        points[i]->CreateFixture(&point_shape, 1);
     }
 
     show_time();
-    printf("start evolove\n");
-    double tmp = 0.1;
-    for (;;) {
-        int number = 0;
-        double max_distance = 0;
-    double max_f_length_global = INT_MAX;
-//    point_set[1] = point_set.back();
-//    angle_set[1] = angle_set.back();
-//    point_set.pop_back();
-//    angle_set.pop_back();
-        for (int n = 0; n < 1000; ) {
-//            if (n == -1 && point_set.size() == 3) {
-//                point_set.pop_back();
-//                angle_set.pop_back();
-//                n -= 63;
-//            }
-            vector<vector<int> > nearest_point(point_set.size(), vector<int>(3, -1));
-            for (int i = 0; i < point_set.size(); i++) {
-                const Point &p1 = point_set[i];
-                const double &a = angle_set[i];
+    printf("start evolove ...\n");
 
-                for (int j = 0; j < point_set.size(); j++) {
-                    const Point &p2 = point_set[j];
+//    float32 timeStep = 1.0f / 60.0f;
+//    int32 velocityIterations = 6;
+//    int32 positionIterations = 2;
 
-                    if (i == j)
-                        continue;
+//    for (int i = 0; i < 600; i++) {
+//        calc_next_step(points);
+//        world->Step(timeStep, velocityIterations, positionIterations);
+//    }
 
-                    Vector v = make_pair(p2.x - p1.x, p2.y - p1.y);
-                    int k = -1;
-                    for (int l = 0; l < 3; l++) {
-                        double tmp = normalize_angle(a + 120 * l);
-                        Vector n = make_pair(sin(to_rad(tmp)), cos(to_rad(tmp)));
-                        if (cos(to_rad(60)) * length(v) <= v.x * n.x + v.y * n.y)
-                            k = l;
-                    }
-                    assert(k != -1);
-                    if (nearest_point[i][k] == -1)
-                        nearest_point[i][k] = j;
-                    else {
-                        const Point &p3 = point_set[nearest_point[i][k]];
-                        /*double a12 = abs(angle_set[i] - angle_set[j]),
-                               a13 = abs(angle_set[i] - angle_set[nearest_point[i][k]]);
-                        while (60 < a12)
-                            a12 = abs(a12 - 120);
-                        while (60 < a13)
-                            a13 = abs(a13 - 120);*/
-                        if (length(v) < length(make_pair(p1.x - p3.x, p1.y - p3.y)))
-                            nearest_point[i][k] = j;
-                    }
-                }
-            }
-            Vectors f(point_set.size(), make_pair(0, 0));
-            vector<double> da(point_set.size(), 0);
-            double max_repulsion_force = 0;
-            max_distance = 0;
-            for (int i = 0; i < point_set.size(); i++) {
-                const Point &p1 = point_set[i];
-                const double &a1 = angle_set[i];
-                Vector &fi = f[i];
-
-                for (int j = 0; j < normalized_polygon.size(); j++) {
-                    const Point &u = normalized_polygon[j],
-                                &v = normalized_polygon[(j + 1) % normalized_polygon.size()],
-                                &w = normalized_polygon[(j + 2) % normalized_polygon.size()];
-                    Vector e1 = make_pair(u.x - v.x, u.y - v.y),
-                           e2 = make_pair(v.x - w.x, v.y - w.y);
-                    double dis = distance_to_line(p1, u, v);
-                    if (1 < dis || (e1.x * e2.y - e1.y * e2.x < 0 && 1 < distance_to_line(p1, v, w)))
-                        continue;
-                    if (i == -1) {
-                        printf("dis1 = %lf\n", dis);
-                        printf("u(%lf, %lf)\n", u.x, u.y);
-                        printf("v(%lf, %lf)\n", v.x, v.y);
-                        printf("p[%d](%lf, %lf)\n", i, p1.x, p1.y);
-                    }
-//                    if (abs(dis) < ZERO)
-//                        return make_pair(normalize_polygon(point_set, sqrt(3) / edge_length), angle_set);
-                    dis = max(dis, 0.1);
-                    Vector n = make_pair(u.y - v.y, v.x - u.x);
-                    double kn = 1 - pow(dis / 1, -2);
-                    if (0 < kn) {
-                        kn = 0;
-                        int k = -1;
-                        double min_dist = INT_MAX;
-                        for (int l = 0; l < 3; l++) {
-                            const double al = normalize_angle(a1 + l * 120);
-                            Point t = make_pair(0.5 * sin(to_rad(al)) + p1.x, 0.5 * cos(to_rad(al)) + p1.y);
-//                            Vector el = make_pair(t.x - v.x, t.y - v.y);
-                            double dist = distance_to_line(t, u, v);//abs(e1.x * el.y - e1.y * el.x) / length(e1);
-                            if (dist < min_dist) {
-                                min_dist = dist;
-                                k = l;
-                            }
-                        }
-                        assert(k != -1);
-                        double aaa = normalize_angle(a1 + k * 120);
-                        double tmp = (- to_arc(atan2(v.y - u.y, v.x - u.x)) - aaa);
-                        while (90 <= abs(tmp))
-                            if (0 < tmp)
-                                tmp -= 90;
-                            else
-                                tmp += 90;
-                        double min_distance = sin(to_rad(30 + abs(tmp)));
-                        kn = 1 - pow(dis / min_distance, -2);
-                        if (0 < kn)
-                            kn = 0;
-                        else {
-                            da[i] += 0.5*tmp / pow(2 * dis, 2);
-                        }
-                        max_distance = max(max_distance, - dis + min_distance);
-                    }
-//                    kn *= 10;
-                    if (max_repulsion_force < kn) {
-                        max_repulsion_force = kn;
-                        number = i;
-                    }
-                    max_distance = max(max_distance, - dis + 0.5);
-                    assert(ZERO < abs(length(n)));
-                    fi = make_pair(fi.x - kn * n.x / length(n), fi.y - kn * n.y / length(n));
-                }
-
-                for (int k = 0; k < 3; k++) {
-                    const double ak = normalize_angle(a1 + k * 120);
-
-                    if (nearest_point[i][k] != -1) {
-                        const int &j = nearest_point[i][k];
-                        const Point &p2 = point_set[j];
-                        const double &a2 = angle_set[j];
-
-                        double doa = normalize_angle(a2 - a1 - 180);
-                        for (int l = 0; l < 3; l++)
-                            if (abs(doa = normalize_angle(ak - (a2 + l * 120 + 180))) <= 60)
-                                break;
-
-                        Vector v = make_pair(p2.x - p1.x, p2.y - p1.y),
-                               n = make_pair(sin(to_rad(ak)), cos(to_rad(ak))),
-                               t = make_pair(sin(to_rad(ak + 90)), cos(to_rad(ak + 90)));
-
-                        double min_distance = 0.5 + sin(to_rad(30 + abs(doa)));
-                        double v_n_length = v.x * n.x + v.y * n.y,
-                               v_t_length = v.x * t.x + v.y * t.y,
-                               kn = 1 - pow(v_n_length / min_distance, -2),
-                               kt = v_t_length * min(0.5, pow(v_n_length / min_distance, -3));
-                        assert(0 <= v_n_length);
-//                        kn *= 10;
-                        if (v_n_length < 1) {
-//                            kt = 0;
-//                            kt = kn / v_n_length * sqrt(pow(length(v), 2) - pow(v_n_length, 2)) * (v_t_length / abs(v_t_length));
-//                            kt = kn * tan(to_rad(doa));
-                        }
-                        if (max_repulsion_force < sqrt(pow(kn, 2) + pow(kt, 2))) {
-                            max_repulsion_force = sqrt(pow(kn, 2) + pow(kt, 2));
-                            number = i;
-                        }
-//                        if (k < 0)
-//                            k *= 0.1;//1.0 / (n + 1);
-                        fi = make_pair(fi.x + kn * n.x + kt * t.x, fi.y + kn * n.y + kt * t.y);
-                        da[i] -= doa / 2 / max(1.0, pow(length(v), 2));
-                        //f2 = make_pair(f2.x - k * v.x, f2.y - k * v.y);
-
-                        if (i == -1)
-                            printf("%d(%lf)exist %d(%lf), da[i] = %lf, n=%lf, t=%lf\n", i, ak, j, doa, da[i], kn, kt);
-//                        printf("p[%d] <-> p[%d]\n", i, j);
-                        max_distance = max(max_distance, - length(v) + min_distance);
-                    }
-                }
-            }
-            double max_f_length = 0;
-            for (int i = 0; i < f.size(); i++) {
-                max_f_length = max(max_f_length, length(f[i]));
-                if (i == -1)
-                    printf("f[%d](%lf, %lf)\n", i, f[i].x, f[i].y);
-            }
-            if (max_f_length < max_f_length_global) {
-                max_f_length_global = max_f_length;
-                n = 0;
-            } else {
-                n++;
-            }
-            if (max_f_length < 0.01)
-                break;
-            if (n > 995)
-                printf("[%d]max_f_length = %lf\n", n, max_f_length);
-                //return normalize_polygon(point_set, 1 / edge_length);
-//            double k = 0.01 * min(1.0, 1 / max_f_length);
-            double k = 0.02 / max_f_length;
-            double max_a = 0;
-            for (int i = 0; i < angle_set.size(); i++)
-                max_a = max(max_a, abs(angle_set[i]));
-            double ka = 1;
-            for (int i = 0; i < f.size(); i++) {
-                Point &p = point_set[i];
-                Vector &v = f[i];
-                p = move_in_polygon(normalized_polygon, p, make_pair(k * v.x, k * v.y));
-                angle_set[i] = normalize_angle(angle_set[i] + ka * da[i]);
-//                printf("%lf\n", angle_set[i]);
-            }
-            //printf("Round: %d, point[%d](%lf, %lf) move(%lf, %lf)", n, i, p1.x, p1.y, f.x, f.y);
-            /*double limit = 0.005 * edge_length;
-            Point plb = make_pair(-limit, -limit),
-                  prt = make_pair(limit, limit);
-            p1 = moveInnormalized_Polygon(normalized_polygon, p1, randPoint(plb, prt));*/
-            //printf(" now at(%.6lf, %.6lf)\n", p1.x, p1.y);
-        }
-        if (max_distance < tmp) {
-            break;
-            bool go_on = false;
-            for (int i = 0; i < normalized_polygon.size(); i++) {
-                const Point &p1 = normalized_polygon[i];
-                bool k = true;
-                for (int j = 0; j < point_set.size() && k; j++) {
-                    Point &p2 = point_set[j];
-                    k = (1 <= sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2)));
-                }
-                go_on |= k;
-                if (k) {
-                    printf("add point[%d](%lf, %lf)\n", point_set.size(), p1.x, p1.y);
-                    point_set.push_back(p1);
-                    angle_set.push_back(normalize_angle(360.0 * rand() / RAND_MAX));
-                }
-            }
-            if (!go_on)
-                break;
-        } else {
-//    return make_pair(normalize_polygon(point_set, sqrt(3) / edge_length), angle_set);
-            //continue;
-//            break;
-            printf("delete point[%d](%lf, %lf)\n", number, point_set[number].x, point_set[number].y);
-            point_set[number] = point_set.back();
-            angle_set[number] = angle_set.back();
-            point_set.pop_back();
-            angle_set.pop_back();
-        }
-    }
     show_time();
     printf("end evolove\n");
-    printf("contain %d points\n", point_set.size());
+    printf("contain %d points\n", points.size());
     printf("stime = %d\n", stime);
-    return make_pair(normalize_polygon(point_set, sqrt(3) / edge_length), angle_set);
+    return points;
 }
 
 }

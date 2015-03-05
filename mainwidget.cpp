@@ -1,33 +1,58 @@
 #include "mainwidget.h"
 #include <QPainter>
+#include <QTimer>
 #include "sdk.h"
 using namespace sdk;
-Points tmp;
-Points res;
-vector<double> ang;
+Points polygon, normalized_polygon;
 double edge_length = 100;
+vector<b2Body *>points;
 const int attention = -1;
+const int FRAMES_PER_SEC = 12;
 MainWidget::MainWidget(QWidget *parent) :
     QWidget(parent)
 {
-    tmp = test();
-    pair<Points, vector<double> > t = place(tmp, edge_length);
-    res = t.first;
-    ang = t.second;
+    polygon = test();
+    normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));
+    points = place(polygon, edge_length);
+    QTimer *timer = new QTimer();
+    timer->start(1000.0 / FRAMES_PER_SEC);
+    connect(timer, SIGNAL(timeout()), this, SLOT(repaint()));
+//    pair<Points, vector<double> > t = place(tmp, edge_length);
+//    res = t.first;
+//    ang = t.second;
 }
 
 void MainWidget::paintEvent(QPaintEvent *) {
     QPainter painter(this);
 
+    pair<Points, vector<double> > ttt;
+    Vectors vel;
+    for (int i = 0; i < points.size(); i++) {
+        ttt.first.push_back(normalize_point(points[i]->GetPosition(), sqrt(3) / edge_length));
+//        printf("%lf,%lf\n",points[i]->GetAngle(),points[i]->GetPosition().y);
+        ttt.second.push_back(to_arc(points[i]->GetAngle()));
+        vel.push_back(normalize_point(points[i]->GetLinearVelocity(), sqrt(3) / edge_length));
+    }
+    calc_next_step(normalized_polygon, points);
+    painter.setPen(Qt::black);
+    painter.drawText(
+                0,
+                320,
+                QString().sprintf("Point:%d,Frame:%6d,Time:%8.3lfs,K:%.6lf", points.size(), frame, 1.0*frame/FRAMES_PER_SEC, K)
+    );
+//    if (time++ < 120)
+        points.back()->GetWorld()->Step(1.0 / 60, 6, 2);
+    Points res = ttt.first;
+    vector<double> ang = ttt.second;
     //painter.translate(10, 10);
     //painter.scale(1,1);
     //painter.setWindow(0, 0, 2, 2);
     //painter.setViewport(0, 0, this->width(), this->height());
 
     painter.setPen(Qt::black);
-    for (int i = 0; i < tmp.size(); i++) {
-        Point &p1 = tmp[i],
-              &p2 = tmp[(i + 1) % tmp.size()];
+    for (int i = 0; i < polygon.size(); i++) {
+        Point &p1 = polygon[i],
+              &p2 = polygon[(i + 1) % polygon.size()];
         painter.drawLine(p1.x, p1.y, p2.x, p2.y);
     }
     painter.setPen(Qt::green);
@@ -44,15 +69,21 @@ void MainWidget::paintEvent(QPaintEvent *) {
         painter.drawLine(p.x, p.y, p.x + edge_length * sin(a + ttt) / (2 * sqrt(3)), p.y + edge_length * cos(a + ttt) / (2 * sqrt(3)));
         painter.drawLine(p.x, p.y, p.x + edge_length * sin(a + 2 * ttt) / (2 * sqrt(3)), p.y + edge_length * cos(a + 2 * ttt) / (2 * sqrt(3)));
     }
+    painter.setPen(Qt::black);
+    for (int i = 0; i < points.size(); i++) {
+        const Point &p = res[i];
+        const Vector &v = vel[i];
+        painter.drawLine(p.x, p.y, p.x + v.x, p.y + v.y);
+    }
     painter.setPen(Qt::blue);
     for (int i = 0; i < ang.size(); i++) {
         painter.setPen(i == attention || attention == -1 ? Qt::blue : Qt::white);
         double a = to_rad(ang[i] + 60);
         double ttt = to_rad(120);
         Point &p = res[i],
-               p0 = make_pair(p.x + edge_length * sin(a) / sqrt(3), p.y + edge_length * cos(a) / sqrt(3)),
-               p1 = make_pair(p.x + edge_length * sin(a + ttt) / sqrt(3), p.y + edge_length * cos(a + ttt) / sqrt(3)),
-               p2 = make_pair(p.x + edge_length * sin(a + 2 * ttt) / sqrt(3), p.y + edge_length * cos(a + 2 * ttt) / sqrt(3));
+               p0 = b2Vec2(p.x + edge_length * sin(a) / sqrt(3), p.y + edge_length * cos(a) / sqrt(3)),
+               p1 = b2Vec2(p.x + edge_length * sin(a + ttt) / sqrt(3), p.y + edge_length * cos(a + ttt) / sqrt(3)),
+               p2 = b2Vec2(p.x + edge_length * sin(a + 2 * ttt) / sqrt(3), p.y + edge_length * cos(a + 2 * ttt) / sqrt(3));
         painter.drawLine(p0.x, p0.y, p1.x, p1.y);
         painter.drawLine(p1.x, p1.y, p2.x, p2.y);
         painter.drawLine(p2.x, p2.y, p0.x, p0.y);

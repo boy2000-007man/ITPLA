@@ -9,6 +9,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->setupUi(this);
     QWidget *mainwidget = new MainWidget(this);
     this->setCentralWidget(mainwidget);
+    this->setFixedSize(500, 400);
 }
 
 MainWindow::~MainWindow()

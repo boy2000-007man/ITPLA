@@ -21,3 +21,13 @@ HEADERS  += mainwindow.h \
     mainwidget.h
 
 FORMS    += mainwindow.ui
+
+win32 {
+    INCLUDEPATH += D:/
+    LIBS += -L"D:/Box2D" -lBox2D
+}
+
+unix:!macx {
+    INCLUDEPATH += /mnt/Zero_Software
+    LIBS += -L"/mnt/Zero_Software/Box2D" -lBox2D
+}

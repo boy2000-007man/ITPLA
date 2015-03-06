@@ -143,7 +143,9 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                 Point p1_line_middle = 0.5 * n;
                 int l = -1;
                 for (int m = 0; m < 3 && l == -1; m++) {
-                    if (abs(angle_diff(ak, to_arc(p2->GetAngle()) + m * 120 + 180)) <= 60)
+                    double tmp = to_arc(p2->GetAngle()) + 120 * m;
+                    Vector n = Point(sin(to_rad(tmp)), cos(to_rad(tmp)));
+                    if (cos(to_rad(60)) * v.Length() <= -v.x * n.x + -v.y * n.y)
                         l = m;
                 }
                 assert(l != -1);

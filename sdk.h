@@ -122,13 +122,13 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
     vector<double> angle(points.size(), 0);
     K = 1;
     int del = -1;
-    int fault = 0;
+//    double del_val = 0;
     for (int i = 0; i < points.size(); i++) {
         b2Body *p1 = points[i];
 
         double weight_sum = 0;
 
-        int fault_k = 0;
+//        int fault_k = 0;
         for (int k = 0; k < 3; k++) {
             const double ak = to_arc(p1->GetAngle()) + k * 120;
 
@@ -152,31 +152,45 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                 }
                 assert(l != -1);
 
-                Point p2_line_middle = v + 0.5 * Point(sin(to_rad(120 * l) + p2->GetAngle()), cos(to_rad(120 * l) + p2->GetAngle()));
-                if (0.1 < (p1_line_middle - p2_line_middle).Length())
-                    fault_k++;
-                double ang_diff = angle_diff(ak, to_arc(p2->GetAngle()) + l * 120 + 180);
+                const double al = to_arc(p2->GetAngle()) + l * 120;
+                Vector n2 = Point(sin(to_rad(al)), cos(to_rad(al)));
+                Point p2_line_middle = v + 0.5 * n2;
+//                if (0.1 < (p1_line_middle - p2_line_middle).Length())
+//                    fault_k++;
+                double ang_diff = angle_diff(ak, al + 180);
 
                 double v_n_length = v.x * n.x + v.y * n.y,
+                       v_n2_length = - (v.x * n2.x + v.y * n2.y),
                        v_t_length = v.x * t.x + v.y * t.y,
-                       min_distance = (0.5 + sin(to_rad(30 + abs(ang_diff)))) / cos(atan2(v_t_length, v_n_length)),
+                       min_distance = (0.5 + sin(to_rad(30 + abs(ang_diff)))) / (max(v_n_length, v_n2_length) / v.Length()),
                        kr = 1 - pow(v.Length() / min_distance, -2),
-                       ke = 0.5 * v_t_length * v.Length() / v_n_length;
+                       kt = 0.5 * v_t_length;
                 assert(0 <= v_n_length);
-                Vector r = 1 / v.Length() * v,
-                       e = Point(r.y, -r.x);
+                Vector r = 1 / v.Length() * v;
                 double weight = pow(v.Length() / min_distance, -2) + pow((p1_line_middle - p2_line_middle).Length() + 0.1, -2);
-                force[i] += weight * (kr * r + ke * e);
+                force[i] += weight * (kr * r + kt * t);
                 angle[i] += ang_diff / 2 * weight;
                 weight_sum += weight;
+                if (v.Length() / min_distance < K)
+                    del = i;
                 K = min(K, v.Length() / min_distance);
+//                if (v.Length() / min_distance < 0.8) {
+//                    const double al = to_arc(p1->GetAngle()) + k * 120 +60;
+//                    printf("Frame%d:", frame);
+//                    printf("[%lf,%lf]", p1->GetPosition().x, p1->GetPosition().y);
+//                    Point t = p1->GetPosition() + Point(sin(to_rad(al)), cos(to_rad(al)));
+//                    t = normalize_point(t, sqrt(3)/100);
+//                    printf("[%lf,%lf]", t.x, t.y);
+//                    printf("triangle:%d,dis:%lf,min:%lf,ang:%lf\n", i, v.Length(), min_distance, ang_diff);
+//                }
 //                printf("ang_diff=%lf,min_dis=%lf,kr=%lf,v.len=%lf\n", ang_diff, min_distance, kr, v.Length());
             }
+//                fault_k++;
         }
-        if (fault_k > fault) {
-            fault = fault_k;
-            del = i;
-        }
+//        if (fault_k > fault) {
+//            fault = fault_k;
+//            del = i;
+//        }
 
         for (int j = 0; j < normalized_polygon.size(); j++) {
             const Point &u = normalized_polygon[j],
@@ -189,7 +203,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
             int k = -1;
             double min_dist = INT_MAX;
             for (int l = 0; l < 3; l++) {
-                const double al = normalize_angle(to_arc(p1->GetAngle()) + l * 120);
+                const double al = to_arc(p1->GetAngle()) + l * 120;
                 Point t = p1->GetPosition() + 0.5 * Point(sin(to_rad(al)), cos(to_rad(al)));
                 double dist = distance_to_line(t, u, v);
                 if (dist < min_dist) {
@@ -203,14 +217,16 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
             double kn = 1 - pow(dis / min_distance, -2);
             if (0 < kn)
                 continue;
-            continue;
             assert(ZERO < abs(n.Normalize()));
             double weight = pow(min_dist + 0.2, -2);
             force[i] -= weight * kn * n;
             angle[i] += ang_diff * weight;
             weight_sum += weight;
+            if (dis / min_distance < K)
+                del = i;
             K = min(K, dis / min_distance);
         }
+
         if (ZERO < weight_sum) {
             force[i] *= 1 / weight_sum;
             angle[i] /= weight_sum;
@@ -224,7 +240,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
     }
 
     frame++;
-    if (frame > INT_MAX && frame--)
+    if ((del == -1 || frame > INT_MAX) && frame--)
         for (int i = 0; i < points.size(); i++) {
             b2Body *p = points[i];
             p->SetLinearVelocity(Vector(0, 0));
@@ -242,8 +258,8 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
     }
 }
 
-    const int xxx = 4;//10;
-    time_t stime = 1425560927;
+    const int xxx = -1;//10;
+    time_t stime = 1425641876;
 vector<b2Body *>/*pair<Points, vector<double> >*/ place(const Points &polygon, double edge_length) {
     assert(2 < polygon.size());
     const Points normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));

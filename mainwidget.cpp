@@ -7,7 +7,7 @@ Points polygon, normalized_polygon;
 double edge_length = 100;
 vector<b2Body *>points;
 const int attention = -1;
-const int FRAMES_PER_SEC = 12;
+const int FRAMES_PER_SEC = 120;
 MainWidget::MainWidget(QWidget *parent) :
     QWidget(parent)
 {
@@ -65,9 +65,9 @@ void MainWidget::paintEvent(QPaintEvent *) {
         double a = to_rad(ang[i]);
         double ttt = to_rad(120);
         Point &p = res[i];
-        painter.drawLine(p.x, p.y, p.x + edge_length * sin(a) / (2 * sqrt(3)), p.y + edge_length * cos(a) / (2 * sqrt(3)));
-        painter.drawLine(p.x, p.y, p.x + edge_length * sin(a + ttt) / (2 * sqrt(3)), p.y + edge_length * cos(a + ttt) / (2 * sqrt(3)));
-        painter.drawLine(p.x, p.y, p.x + edge_length * sin(a + 2 * ttt) / (2 * sqrt(3)), p.y + edge_length * cos(a + 2 * ttt) / (2 * sqrt(3)));
+        painter.drawLine(p.x, p.y, p.x + r * sin(a), p.y + r * cos(a));
+        painter.drawLine(p.x, p.y, p.x + r * sin(a + ttt), p.y + r * cos(a + ttt));
+        painter.drawLine(p.x, p.y, p.x + r * sin(a + 2 * ttt), p.y + r * cos(a + 2 * ttt));
     }
     painter.setPen(Qt::black);
     for (int i = 0; i < points.size(); i++) {
@@ -81,9 +81,9 @@ void MainWidget::paintEvent(QPaintEvent *) {
         double a = to_rad(ang[i] + 60);
         double ttt = to_rad(120);
         Point &p = res[i],
-               p0 = b2Vec2(p.x + edge_length * sin(a) / sqrt(3), p.y + edge_length * cos(a) / sqrt(3)),
-               p1 = b2Vec2(p.x + edge_length * sin(a + ttt) / sqrt(3), p.y + edge_length * cos(a + ttt) / sqrt(3)),
-               p2 = b2Vec2(p.x + edge_length * sin(a + 2 * ttt) / sqrt(3), p.y + edge_length * cos(a + 2 * ttt) / sqrt(3));
+               p0 = b2Vec2(p.x + 2 * r * sin(a), p.y + 2 * r * cos(a)),
+               p1 = b2Vec2(p.x + 2 * r * sin(a + ttt), p.y + 2 * r * cos(a + ttt)),
+               p2 = b2Vec2(p.x + 2 * r * sin(a + 2 * ttt), p.y + 2 * r * cos(a + 2 * ttt));
         painter.drawLine(p0.x, p0.y, p1.x, p1.y);
         painter.drawLine(p1.x, p1.y, p2.x, p2.y);
         painter.drawLine(p2.x, p2.y, p0.x, p0.y);

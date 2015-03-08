@@ -167,18 +167,15 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                 angle[i] += ang_diff / 2 * weight;
                 weight_sum += weight;
                 K = min(K, v.Length() / min_distance);
-                if ((p1_line_middle - p2_line_middle).Length() < 0.1)
-                    del_rank.back().first.first--;
-                del_rank.back().first.second += max(0.0, 1 - v.Length() / min_distance);
+                if ((p1_line_middle - p2_line_middle).Length() < 0.15)
+                    del_rank.back().first.first += 10;
+                del_rank.back().first.second -= max(0.0, 1 - v.Length() / min_distance);
             }
         }
 
         for (int j = 0; j < normalized_polygon.size(); j++) {
             const Point &u = normalized_polygon[j],
-                        &v = normalized_polygon[(j + 1) % normalized_polygon.size()],
-                        &w = normalized_polygon[(j + 2) % normalized_polygon.size()];
-            Vector e1 = u - v,
-                   e2 = v - w;
+                        &v = normalized_polygon[(j + 1) % normalized_polygon.size()];
             double dis = distance_to_line(p1->GetPosition(), u, v);
             Vector n = Point(u.y - v.y, v.x - u.x);
             int k = -1;
@@ -193,8 +190,10 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                 }
             }
             assert(k != -1);
-            double ang_diff = angle_diff(to_arc(p1->GetAngle()) + k * 120, 180 - to_arc(atan2(v.y - u.y, v.x - u.x)));
+            const double ak = to_arc(p1->GetAngle()) + k * 120;
+            double ang_diff = angle_diff(ak, 180 - to_arc(atan2(v.y - u.y, v.x - u.x)));
             double min_distance = sin(to_rad(30 + abs(ang_diff)));
+
             double kn = 1 - pow(dis / min_distance, -2);
             if (0 < kn)
                 continue;
@@ -205,8 +204,8 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
             weight_sum += weight;
             K = min(K, dis / min_distance);
             if (min_dist < 0.1)
-                del_rank.back().first.first--;
-            del_rank.back().first.second += max(0.0, 1 - dis / min_distance);
+                del_rank.back().first.first++;
+            del_rank.back().first.second -= max(0.0, 1 - dis / min_distance);
         }
 
         if (ZERO < weight_sum) {
@@ -221,16 +220,25 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
         p->SetAngularVelocity(to_rad(angle[i]));
     }
 
+    sort(del_rank.begin(), del_rank.end());
+    int del = -1;
+    for (int i = 0; i < del_rank.size() && del == -1; i++)
+        if (ZERO < abs(del_rank[i].first.second))
+            del = del_rank[i].second;
+    static pair<int, int> pre_del(-1, 0);
+    if (pre_del.first == del)
+        pre_del.second++;
+    else
+        pre_del = pair<int, int>(del, 1);
     frame++;
-    if ((frame > INT_MAX) && frame--)
+    if (((pre_del.first == -1 && pre_del.second > 2000) || frame > INT_MAX) && frame--)
         for (int i = 0; i < points.size(); i++) {
             b2Body *p = points[i];
             p->SetLinearVelocity(Vector(0, 0));
             p->SetAngularVelocity(0);
         }
-    sort(del_rank.begin(), del_rank.end());
-    int del = del_rank.back().second;
-    if (frame % 2000 == 0 && K < 0.85) {
+    if ((frame % 4000 == 0 || (pre_del.first != -1 && pre_del.second > 1000)) && K < 0.85) {
+        pre_del.second = 0;
         points.back()->GetWorld()->DestroyBody(points[del]);
         points[del] = points.back();
         points.pop_back();
@@ -243,7 +251,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
 }
 
     const int xxx = -1;//10;
-    time_t stime = 1425641876;
+    time_t stime = -1;//1425746144;//-1;//1425641876;
 vector<b2Body *>/*pair<Points, vector<double> >*/ place(const Points &polygon, double edge_length) {
     assert(2 < polygon.size());
     const Points normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));

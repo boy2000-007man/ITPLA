@@ -28,7 +28,7 @@ Points test() {
 //    polygon.push_back(Point(600, -100));
     polygon.push_back(Point(400, 0));
     polygon.push_back(Point(300, 300));
-//    polygon.push_back(Point(200, 175));
+    polygon.push_back(Point(200, 175));
     return polygon;
 }
 
@@ -194,6 +194,63 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
             double ang_diff = angle_diff(ak, 180 - to_arc(atan2(v.y - u.y, v.x - u.x)));
             double min_distance = sin(to_rad(30 + abs(ang_diff)));
 
+            if (dis < min_distance) {
+//                printf("before mis_distance: %lf\n", min_distance);
+                const double a0 = to_arc(p1->GetAngle());
+                Point t0 = p1->GetPosition() + Point(sin(to_rad(a0 + 60)), cos(to_rad(a0 + 60))),
+                      t1 = p1->GetPosition() + Point(sin(to_rad(a0 - 60)), cos(to_rad(a0 - 60))),
+                      t2 = p1->GetPosition() + Point(sin(to_rad(a0 - 180)), cos(to_rad(a0 - 180)));
+                Points triangle;
+                triangle.push_back(t0);
+                triangle.push_back(t1);
+                triangle.push_back(t2);
+                if (in_polygon(triangle, u))
+                    for (int l = 0; l < 3; l++) {
+                        const Point &tu = triangle[l],
+                                    &tv = triangle[(l + 1) % triangle.size()];
+                        Vector tn = Point(tu.y - tv.y, tv.x - tu.x);
+                        if (0 < tn.x * n.x + tn.y + n.y) {
+                            Vector uv = v - u,
+                                   utu = tu - u,
+                                   utv = tv - u,
+                                   tutv = tv - tu;
+                            if ((uv.x * utu.x + uv.y * utu.y) * (uv.x * utv.x + uv.y * utv.y) < 0)
+                                min_distance = min(min_distance, dis + distance_to_line(u, tu, tv) / abs(cos(atan2(uv.y, uv.x) - atan2(tutv.y, tutv.x))));
+                        }
+                    }
+                if (in_polygon(triangle, v))
+                    for (int l = 0; l < 3; l++) {
+                        const Point &tu = triangle[l],
+                                    &tv = triangle[(l + 1) % triangle.size()];
+                        Vector tn = Point(tu.y - tv.y, tv.x - tu.x);
+                        if (0 < tn.x * n.x + tn.y + n.y) {
+                            Vector uv = v - u,
+                                   vtu = tu - v,
+                                   vtv = tv - v,
+                                   tutv = tv - tu;
+                            if ((uv.x * vtu.x + uv.y * vtu.y) * (uv.x * vtv.x + uv.y * vtv.y) < 0)
+                                min_distance = min(min_distance, dis + distance_to_line(v, tu, tv) / abs(cos(atan2(uv.y, uv.x) - atan2(tutv.y, tutv.x))));
+                        }
+                    }
+//                printf("after mis_distance: %lf\n", min_distance);
+                bool intersect = in_polygon(triangle, u) || in_polygon(triangle, v);
+                for (int l = 0; l < 3 && !intersect; l++) {
+                    const Point &tu = triangle[l],
+                                &tv = triangle[(l + 1) % triangle.size()];
+                    Vector uv = v - u,
+                           vtu = tu - v,
+                           vtv = tv - v,
+                           tutv = tv - tu,
+                           tvu = u - tv,
+                           tvv = v - tv;
+                    if ((uv.x * vtu.y - uv.y * vtu.x) * (uv.x * vtv.y - uv.y * vtv.x) < 0
+                     && (tutv.x * tvu.y - tutv.y * tvu.x) * (tutv.x * tvv.y - tutv.y * tvv.x) < 0)
+                        intersect = true;
+                }
+                if (!intersect)
+                    continue;
+            }
+
             double kn = 1 - pow(dis / min_distance, -2);
             if (0 < kn)
                 continue;
@@ -237,7 +294,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
             p->SetLinearVelocity(Vector(0, 0));
             p->SetAngularVelocity(0);
         }
-    if ((frame % 4000 == 0 || (pre_del.first != -1 && pre_del.second > 1000)) && K < 0.85) {
+    if ((frame % 2000 == 0 && del != -1/*|| (pre_del.first != -1 && pre_del.second > 1000)*/) && K < 0.85) {
         pre_del.second = 0;
         points.back()->GetWorld()->DestroyBody(points[del]);
         points[del] = points.back();
@@ -251,7 +308,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
 }
 
     const int xxx = -1;//10;
-    time_t stime = -1;//1425746144;//-1;//1425641876;
+    time_t stime = 1425813081;//-1;//1425746144;//-1;//1425641876;
 vector<b2Body *>/*pair<Points, vector<double> >*/ place(const Points &polygon, double edge_length) {
     assert(2 < polygon.size());
     const Points normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));

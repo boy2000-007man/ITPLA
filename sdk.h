@@ -7,17 +7,24 @@
 #include <ctime>
 #include <cstdio>
 #include <Box2D/Box2D.h>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Polygon_2.h>
+#include <CGAL/Polygon_2_algorithms.h>
 #define Point b2Vec2
 #define Points vector<Point >
 #define Vector Point
 #define Vectors Points
+#define Point_2s vector<Point_2 >
 #define ZERO 1e-9
 #define CURRENT_TIME (10.0 * clock() / CLOCKS_PER_SEC)
 #define show_time() printf("[%.3lf]", CURRENT_TIME)
 #define pi b2_pi
 #define to_rad(x) ((x) / 180.0 * pi)
 #define to_arc(x) ((x) * 180.0 / pi)
-
+typedef CGAL::Exact_predicates_inexact_constructions_kernel K;
+typedef K::Point_2 Point_2;
+typedef CGAL::Polygon_2<K> Polygon_2;
+typedef CGAL::Triangle_2<K> Triangle_2;
 namespace sdk {
 using namespace std;
 
@@ -67,21 +74,55 @@ Points normalize_polygon(const Points &polygon, const double edge_length) {
     return normalized_polygon;
 }
 
-bool in_polygon(const Points &polygon/*normalized_polygon*/, const Point &p/*normalized_point*/) {
-    bool result = false;
-    for (int i = 0; i < polygon.size(); i++) {
-        const Point &p1 = polygon[i],
-                    &p2 = polygon[(i + 1) % polygon.size()];
-        if ((p1.y - p.y) * (p2.y - p.y) <= 0
-            && ZERO < abs(p1.y - p2.y)
-            && !(p.x < p1.x && abs(p.y - p1.y) < ZERO)
-            && p1.x + (p.y - p1.y) * (p1.x - p2.x) / (p1.y - p2.y) <= p.x)
-            if (abs(p1.x + (p.y - p1.y) * (p1.x - p2.x) / (p1.y - p2.y) - p.x) < ZERO)
-                return true;
-            else
-                result = !result;
+Point_2 convert_to_p2(const Point &p) {
+    return Point_2(p.x, p.y);
+}
+
+Point_2s convert_to_p2s(const Points &polygon) {
+    Point_2s polygon_2;
+    for (int i = 0; i < polygon.size(); i++)
+        polygon_2.push_back(convert_to_p2(polygon[i]));
+    return polygon_2;
+}
+
+double area_polygon(const Points &polygon) {
+    Point_2s polygon_2 = convert_to_p2s(polygon);
+    return Polygon_2(&*polygon_2.begin(), &*polygon_2.end()).area();
+}
+
+bool in_polygon(const Points &polygon, const Point &p) {
+    Point_2s polygon_2 = convert_to_p2s(polygon);
+    Point_2 p_2 = convert_to_p2(p);
+    switch (CGAL::bounded_side_2(&*polygon_2.begin(), &*polygon_2.end(), p_2, K())) {
+        case CGAL::ON_BOUNDED_SIDE :
+          return true;
+        case CGAL::ON_BOUNDARY:
+          return false;
+        case CGAL::ON_UNBOUNDED_SIDE:
+          return false;
     }
-    return result;
+}
+
+Triangle_2 create_triangle(const Point &c, const double arc) {
+    Point_2 p0 = convert_to_p2(c + Point(sin(to_rad(arc - 60)), cos(to_rad(arc - 60)))),
+            p1 = convert_to_p2(c + Point(sin(to_rad(arc - 180)), cos(to_rad(arc - 180)))),
+            p2 = convert_to_p2(c + Point(sin(to_rad(arc + 60)), cos(to_rad(arc + 60))));
+    return Triangle_2(p0, p1, p2);
+}
+
+bool intersect_each(const Point &c1, const double a1, const Point &c2, const double a2) {
+    return CGAL::do_intersect(create_triangle(c1, a1), create_triangle(c2, a2));
+}
+
+int calc_direction(const Point &c, const double arc, const Point &p) {
+    Vector v = p - c;
+    for (int i = 0; i < 3; i++) {
+        double ai = arc + 120 * i;
+        Vector n = Point(sin(to_rad(ai)), cos(to_rad(ai)));
+        if (cos(to_rad(60)) * v.Length() <= v.x * n.x + v.y * n.y)
+            return i;
+    }
+    return -1;
 }
 
 double K;
@@ -99,23 +140,34 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
             if (i == j)
                 continue;
 
-            Vector v = p2->GetPosition() - p1->GetPosition();
-            int k = -1;
-            for (int l = 0; l < 3; l++) {
-                double tmp = normalize_angle(to_arc(p1->GetAngle()) + 120 * l);
-                Vector n = Point(sin(to_rad(tmp)), cos(to_rad(tmp)));
-                if (cos(to_rad(60)) * v.Length() <= v.x * n.x + v.y * n.y)
-                    k = l;
-            }
+            int k = calc_direction(p1->GetPosition(), to_arc(p1->GetAngle()), p2->GetPosition());
             assert(k != -1);
             if (nearest_point[i][k] == -1)
                 nearest_point[i][k] = j;
             else {
                 b2Body *p3 = points[nearest_point[i][k]];
-                if (v.Length() < (p1->GetPosition() - p3->GetPosition()).Length())
+                if ((p2->GetPosition() - p1->GetPosition()).Length() < (p1->GetPosition() - p3->GetPosition()).Length())
                     nearest_point[i][k] = j;
             }
         }
+    }
+
+    vector<vector<int> > overlap(points.size());
+    for (int i = 0; i < points.size(); i++) {
+        vector<bool> intersect(points.size(), false);
+        b2Body *p1 = points[i];
+        for (int j = 0; j < points.size(); j++) {
+            b2Body *p2 = points[j];
+            if (i == j)
+                continue;
+            intersect[j] = intersect_each(p1->GetPosition(), to_arc(p1->GetAngle()), p2->GetPosition(), to_arc(p2->GetAngle()));
+        }
+        for (int j = 0; j < 3; j++)
+            if (nearest_point[i][j] != -1)
+                intersect[nearest_point[i][j]] = false;
+        for (int j = 0; j < points.size(); j++)
+            if (intersect[j])
+                overlap[i].push_back(j);
     }
 
     Vectors force(points.size(), Point(0, 0));
@@ -140,13 +192,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                        t = Point(sin(to_rad(ak + 90)), cos(to_rad(ak + 90)));
 
                 Point p1_line_middle = 0.5 * n;
-                int l = -1;
-                for (int m = 0; m < 3 && l == -1; m++) {
-                    double tmp = to_arc(p2->GetAngle()) + 120 * m;
-                    Vector n = Point(sin(to_rad(tmp)), cos(to_rad(tmp)));
-                    if (cos(to_rad(60)) * v.Length() <= -v.x * n.x + -v.y * n.y)
-                        l = m;
-                }
+                int l = calc_direction(p2->GetPosition(), to_arc(p2->GetAngle()), p1->GetPosition());
                 assert(l != -1);
 
                 const double al = to_arc(p2->GetAngle()) + l * 120;
@@ -164,7 +210,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                 Vector r = 1 / v.Length() * v;
                 double weight = pow(v.Length() / min_distance, -2) + pow((p1_line_middle - p2_line_middle).Length() + 0.1, -2);
                 force[i] += weight * (kr * r + kt * t);
-                angle[i] += ang_diff / 2 * weight;
+                angle[i] += 0.5 * ang_diff * weight;
                 weight_sum += weight;
                 K = min(K, v.Length() / min_distance);
                 if ((p1_line_middle - p2_line_middle).Length() < 0.15)
@@ -172,6 +218,45 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                 del_rank.back().first.second -= max(0.0, 1 - v.Length() / min_distance);
             }
         }
+
+//        for (int k = 0; k < overlap[i].size(); k++) {
+//            const int &j = overlap[i][k];
+//            b2Body *p2 = points[j];
+//            double ak = calc_direction(p1->GetPosition(), to_arc(p1->GetAngle()), p2->GetPosition()) * 120 + to_arc(p1->GetAngle());
+
+//            Vector v = p2->GetPosition() - p1->GetPosition(),
+//                   n = Point(sin(to_rad(ak)), cos(to_rad(ak))),
+//                   t = Point(sin(to_rad(ak + 90)), cos(to_rad(ak + 90)));
+
+//            Point p1_line_middle = 0.5 * n;
+//            int l = -1;
+//            for (int m = 0; m < 3 && l == -1; m++) {
+//                double tmp = to_arc(p2->GetAngle()) + 120 * m;
+//                Vector n = Point(sin(to_rad(tmp)), cos(to_rad(tmp)));
+//                if (cos(to_rad(60)) * v.Length() <= -v.x * n.x + -v.y * n.y)
+//                    l = m;
+//            }
+//            assert(l != -1);
+
+//            const double al = to_arc(p2->GetAngle()) + l * 120;
+//            Vector n2 = Point(sin(to_rad(al)), cos(to_rad(al)));
+//            Point p2_line_middle = v + 0.5 * n2;
+//            double ang_diff = angle_diff(ak, al + 180);
+
+//            double v_n_length = v.x * n.x + v.y * n.y,
+//                   v_n2_length = - (v.x * n2.x + v.y * n2.y),
+//                   p2_line_middle_t_length = p2_line_middle.x * t.x + p2_line_middle.y * t.y,
+//                   min_distance = (0.5 + sin(to_rad(30 + abs(ang_diff)))) / (max(v_n_length, v_n2_length) / v.Length()),
+//                   kr = 1 - pow(v.Length() / min_distance, -2),
+//                   kt = 0.5 * p2_line_middle_t_length;
+//            assert(0 <= v_n_length);
+//            Vector r = 1 / v.Length() * v;
+//            double weight = pow(v.Length() / min_distance, -2) + pow((p1_line_middle - p2_line_middle).Length() + 0.1, -2);
+//            force[i] += weight * (kr * r);
+//            weight_sum += weight;
+//            K = min(K, v.Length() / min_distance);
+//            del_rank.back().first.second -= max(0.0, 1 - v.Length() / min_distance);
+//        }
 
         for (int j = 0; j < normalized_polygon.size(); j++) {
             const Point &u = normalized_polygon[j],
@@ -288,7 +373,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
     else
         pre_del = pair<int, int>(del, 1);
     frame++;
-    if (((pre_del.first == -1 && pre_del.second > 2000) || frame > INT_MAX) && frame--)
+    if (((pre_del.first == -1 && pre_del.second > 2000) || frame > 20000&&INT_MAX) && frame--)
         for (int i = 0; i < points.size(); i++) {
             b2Body *p = points[i];
             p->SetLinearVelocity(Vector(0, 0));
@@ -308,7 +393,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
 }
 
     const int xxx = -1;//10;
-    time_t stime = 1425813081;//-1;//1425746144;//-1;//1425641876;
+    time_t stime = 1425904342;//-1;//1425813081;//-1;//1425746144;//-1;//1425641876;
 vector<b2Body *>/*pair<Points, vector<double> >*/ place(const Points &polygon, double edge_length) {
     assert(2 < polygon.size());
     const Points normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));
@@ -328,12 +413,9 @@ vector<b2Body *>/*pair<Points, vector<double> >*/ place(const Points &polygon, d
 
     stime = (stime != -1 ? stime : time(NULL));
     srand(stime);//time(NULL));
-    int total = 0xfff,
-        inside = 0;
-    for (int i = 0; i < total; i++)
-        inside += in_polygon(normalized_polygon, rand_point(plb, prt));
-    double area = (prt.x - plb.x) * (prt.y - plb.x) * inside / total;
-    printf("approximate area = %.6lf\n", area);
+
+    double area = area_polygon(normalized_polygon);
+    printf("accurate area = %.6lf\n", area);
 
     show_time();
     printf("create world ...\n", area);
@@ -371,15 +453,15 @@ vector<b2Body *>/*pair<Points, vector<double> >*/ place(const Points &polygon, d
     show_time();
     printf("start evolove ...\n");
 
-//    float32 timeStep = 1.0f / 60.0f;
-//    int32 velocityIterations = 6;
-//    int32 positionIterations = 2;
+/*    float32 timeStep = 1.0f / 60.0f;
+    int32 velocityIterations = 6;
+    int32 positionIterations = 2;
 
-//    for (int i = 0; i < 600; i++) {
-//        calc_next_step(points);
-//        world->Step(timeStep, velocityIterations, positionIterations);
-//    }
-
+    for (int i = 0; i < 600; i++) {
+        calc_next_step(points);
+        world->Step(timeStep, velocityIterations, positionIterations);
+    }
+*/
     show_time();
     printf("end evolove\n");
     printf("contain %d points\n", points.size());

@@ -38,7 +38,7 @@ void MainWidget::paintEvent(QPaintEvent *) {
     painter.drawText(
                 0,
                 320,
-                QString().sprintf("Point:%d,Frame:%6d,Time:%8.3lfs,K:%.6lf", points.size(), frame, 1.0*frame/FRAMES_PER_SEC, K)
+                QString().sprintf("Point:%d,Frame:%6d,Time:%8.3lfs,K:%.6lf", points.size(), frame, 1.0*frame/FRAMES_PER_SEC, sdk::K)
     );
 //    if (time++ < 120)
         points.back()->GetWorld()->Step(1.0 / 60, 6, 2);

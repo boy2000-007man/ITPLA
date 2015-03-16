@@ -22,6 +22,9 @@ HEADERS  += mainwindow.h \
 
 FORMS    += mainwindow.ui
 
+QMAKE_CXXFLAGS += -frounding-math
+LIBS += -lgmp -lCGAL -lCGAL_Core
+
 win32 {
     INCLUDEPATH += D:/
     LIBS += -L"D:/Box2D" -lBox2D

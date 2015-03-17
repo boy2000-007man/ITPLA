@@ -40,6 +40,11 @@ void MainWidget::paintEvent(QPaintEvent *) {
                 320,
                 QString().sprintf("Point:%d,Frame:%6d,Time:%8.3lfs,K:%.6lf", points.size(), frame, 1.0*frame/FRAMES_PER_SEC, sdk::K)
     );
+    painter.drawText(
+                0,
+                335,
+                QString().sprintf("E:%.6lf,T:%.6lf", sdk::E, sdk::E / points.size())
+    );
 //    if (time++ < 120)
         points.back()->GetWorld()->Step(1.0 / 60, 6, 2);
     Points res = ttt.first;

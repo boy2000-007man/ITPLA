@@ -122,11 +122,19 @@ int calc_direction(const Point &c, const double arc, const Point &p) {
         if (cos(to_rad(60)) * v.Length() <= v.x * n.x + v.y * n.y)
             return i;
     }
+    for (int i = 0; i < 3; i++) {
+        double ai = arc + 120 * i;
+        Vector n = Point(sin(to_rad(ai)), cos(to_rad(ai)));
+        if (cos(to_rad(61)) * v.Length() <= v.x * n.x + v.y * n.y)
+            return i;
+    }
     return -1;
 }
 
-double K;
+double K, E = INT_MAX, pre_E, min_E = INT_MAX;
 int frame;
+vector<Point> min_p;
+vector<double> min_a;
 void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *> &points) {
     assert(0 < points.size());
 
@@ -162,9 +170,9 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                 continue;
             intersect[j] = intersect_each(p1->GetPosition(), to_arc(p1->GetAngle()), p2->GetPosition(), to_arc(p2->GetAngle()));
         }
-        for (int j = 0; j < 3; j++)
-            if (nearest_point[i][j] != -1)
-                intersect[nearest_point[i][j]] = false;
+//        for (int j = 0; j < 3; j++)
+//            if (nearest_point[i][j] != -1)
+//                intersect[nearest_point[i][j]] = false;
         for (int j = 0; j < points.size(); j++)
             if (intersect[j])
                 overlap[i].push_back(j);
@@ -173,6 +181,8 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
     Vectors force(points.size(), Point(0, 0));
     vector<double> angle(points.size(), 0);
     K = 1;
+    pre_E = E;
+    E = 0;
     vector<pair<pair<int, double>, int> > del_rank;
     for (int i = 0; i < points.size(); i++) {
         del_rank.push_back(make_pair(make_pair(0.0, 0), i));
@@ -219,44 +229,45 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
             }
         }
 
-//        for (int k = 0; k < overlap[i].size(); k++) {
-//            const int &j = overlap[i][k];
-//            b2Body *p2 = points[j];
-//            double ak = calc_direction(p1->GetPosition(), to_arc(p1->GetAngle()), p2->GetPosition()) * 120 + to_arc(p1->GetAngle());
+        for (int k = 0; k < overlap[i].size(); k++) {
+            const int &j = overlap[i][k];
+            b2Body *p2 = points[j];
+            double ak = calc_direction(p1->GetPosition(), to_arc(p1->GetAngle()), p2->GetPosition()) * 120 + to_arc(p1->GetAngle());
 
-//            Vector v = p2->GetPosition() - p1->GetPosition(),
-//                   n = Point(sin(to_rad(ak)), cos(to_rad(ak))),
-//                   t = Point(sin(to_rad(ak + 90)), cos(to_rad(ak + 90)));
+            Vector v = p2->GetPosition() - p1->GetPosition(),
+                   n = Point(sin(to_rad(ak)), cos(to_rad(ak))),
+                   t = Point(sin(to_rad(ak + 90)), cos(to_rad(ak + 90)));
 
-//            Point p1_line_middle = 0.5 * n;
-//            int l = -1;
-//            for (int m = 0; m < 3 && l == -1; m++) {
-//                double tmp = to_arc(p2->GetAngle()) + 120 * m;
-//                Vector n = Point(sin(to_rad(tmp)), cos(to_rad(tmp)));
-//                if (cos(to_rad(60)) * v.Length() <= -v.x * n.x + -v.y * n.y)
-//                    l = m;
-//            }
-//            assert(l != -1);
+            Point p1_line_middle = 0.5 * n;
+            int l = -1;
+            for (int m = 0; m < 3 && l == -1; m++) {
+                double tmp = to_arc(p2->GetAngle()) + 120 * m;
+                Vector n = Point(sin(to_rad(tmp)), cos(to_rad(tmp)));
+                if (cos(to_rad(60)) * v.Length() <= -v.x * n.x + -v.y * n.y)
+                    l = m;
+            }
+            assert(l != -1);
 
-//            const double al = to_arc(p2->GetAngle()) + l * 120;
-//            Vector n2 = Point(sin(to_rad(al)), cos(to_rad(al)));
-//            Point p2_line_middle = v + 0.5 * n2;
-//            double ang_diff = angle_diff(ak, al + 180);
+            const double al = to_arc(p2->GetAngle()) + l * 120;
+            Vector n2 = Point(sin(to_rad(al)), cos(to_rad(al)));
+            Point p2_line_middle = v + 0.5 * n2;
+            double ang_diff = angle_diff(ak, al + 180);
 
-//            double v_n_length = v.x * n.x + v.y * n.y,
-//                   v_n2_length = - (v.x * n2.x + v.y * n2.y),
-//                   p2_line_middle_t_length = p2_line_middle.x * t.x + p2_line_middle.y * t.y,
-//                   min_distance = (0.5 + sin(to_rad(30 + abs(ang_diff)))) / (max(v_n_length, v_n2_length) / v.Length()),
-//                   kr = 1 - pow(v.Length() / min_distance, -2),
-//                   kt = 0.5 * p2_line_middle_t_length;
-//            assert(0 <= v_n_length);
-//            Vector r = 1 / v.Length() * v;
-//            double weight = pow(v.Length() / min_distance, -2) + pow((p1_line_middle - p2_line_middle).Length() + 0.1, -2);
+            double v_n_length = v.x * n.x + v.y * n.y,
+                   v_n2_length = - (v.x * n2.x + v.y * n2.y),
+                   p2_line_middle_t_length = p2_line_middle.x * t.x + p2_line_middle.y * t.y,
+                   min_distance = (0.5 + sin(to_rad(30 + abs(ang_diff)))) / (max(v_n_length, v_n2_length) / v.Length()),
+                   kr = 1 - pow(v.Length() / min_distance, -2),
+                   kt = 0.5 * p2_line_middle_t_length;
+            assert(0 <= v_n_length);
+            Vector r = 1 / v.Length() * v;
+            double weight = pow(v.Length() / min_distance, -2) + pow((p1_line_middle - p2_line_middle).Length() + 0.1, -2);
 //            force[i] += weight * (kr * r);
 //            weight_sum += weight;
 //            K = min(K, v.Length() / min_distance);
 //            del_rank.back().first.second -= max(0.0, 1 - v.Length() / min_distance);
-//        }
+            E += max(0.0, 1 / (v.Length() / min_distance) - 1);
+        }
 
         for (int j = 0; j < normalized_polygon.size(); j++) {
             const Point &u = normalized_polygon[j],
@@ -348,6 +359,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
             if (min_dist < 0.1)
                 del_rank.back().first.first++;
             del_rank.back().first.second -= max(0.0, 1 - dis / min_distance);
+            E += max(0.0, 1 / (dis / min_distance) - 1);
         }
 
         if (ZERO < weight_sum) {
@@ -355,6 +367,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
             angle[i] /= weight_sum;
         }
     }
+    E /= 2;
 
     for (int i = 0; i < points.size(); i++) {
         b2Body *p = points[i];
@@ -373,14 +386,28 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
     else
         pre_del = pair<int, int>(del, 1);
     frame++;
-    if (((pre_del.first == -1 && pre_del.second > 2000) || frame > 20000&&INT_MAX) && frame--)
+    static int pause_time = 0;
+//    if (E < min_E) {
+//        min_p.clear();
+//        min_a.clear();
+//        for (int i = 0; i < points.size(); i++) {
+//            b2Body *p = points[i];
+//            min_p.push_back(p->GetPosition());
+//            min_a.push_back(p->GetAngle());
+//        }
+//    }
+//    min_E = min(min_E, E);
+    pause_time += exp(1 - E / pre_E) < (double)rand() / RAND_MAX;
+    if (frame > 30000 && frame--)
         for (int i = 0; i < points.size(); i++) {
             b2Body *p = points[i];
             p->SetLinearVelocity(Vector(0, 0));
             p->SetAngularVelocity(0);
         }
-    if ((frame % 2000 == 0 && del != -1/*|| (pre_del.first != -1 && pre_del.second > 1000)*/) && K < 0.85) {
+    if (pre_del.first != -1 && pow(points.size(), 2) < pause_time && K < 0.85) {
         pre_del.second = 0;
+        pause_time = 0;
+        pre_E = INT_MAX;
         points.back()->GetWorld()->DestroyBody(points[del]);
         points[del] = points.back();
         points.pop_back();

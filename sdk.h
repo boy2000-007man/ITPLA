@@ -132,6 +132,7 @@ int calc_direction(const Point &c, const double arc, const Point &p) {
 }
 
 double K, E = INT_MAX, pre_E, min_E = INT_MAX;
+int min_t = 0;
 int frame;
 vector<Point> min_p;
 vector<double> min_a;
@@ -239,13 +240,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                    t = Point(sin(to_rad(ak + 90)), cos(to_rad(ak + 90)));
 
             Point p1_line_middle = 0.5 * n;
-            int l = -1;
-            for (int m = 0; m < 3 && l == -1; m++) {
-                double tmp = to_arc(p2->GetAngle()) + 120 * m;
-                Vector n = Point(sin(to_rad(tmp)), cos(to_rad(tmp)));
-                if (cos(to_rad(60)) * v.Length() <= -v.x * n.x + -v.y * n.y)
-                    l = m;
-            }
+            int l = calc_direction(p2->GetPosition(), to_arc(p2->GetAngle()), p1->GetPosition());
             assert(l != -1);
 
             const double al = to_arc(p2->GetAngle()) + l * 120;
@@ -387,7 +382,8 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
         pre_del = pair<int, int>(del, 1);
     frame++;
     static int pause_time = 0;
-//    if (E < min_E) {
+    if (E < min_E) {
+        min_t = 0;
 //        min_p.clear();
 //        min_a.clear();
 //        for (int i = 0; i < points.size(); i++) {
@@ -395,19 +391,22 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
 //            min_p.push_back(p->GetPosition());
 //            min_a.push_back(p->GetAngle());
 //        }
-//    }
-//    min_E = min(min_E, E);
+    } else
+        min_t++;
+    min_E = min(min_E, E);
     pause_time += exp(1 - E / pre_E) < (double)rand() / RAND_MAX;
-    if (frame > 30000 && frame--)
+    if (frame > INT_MAX && frame--)
         for (int i = 0; i < points.size(); i++) {
             b2Body *p = points[i];
             p->SetLinearVelocity(Vector(0, 0));
             p->SetAngularVelocity(0);
         }
-    if (pre_del.first != -1 && pow(points.size(), 2) < pause_time && K < 0.85) {
+    if (pre_del.first != -1 && (pow(points.size(), 2) < pause_time || 120*60 < min_t) && K < 0.85) {
         pre_del.second = 0;
         pause_time = 0;
         pre_E = INT_MAX;
+        min_E = INT_MAX;
+        min_t = 0;
         points.back()->GetWorld()->DestroyBody(points[del]);
         points[del] = points.back();
         points.pop_back();
@@ -420,7 +419,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
 }
 
     const int xxx = -1;//10;
-    time_t stime = 1425904342;//-1;//1425813081;//-1;//1425746144;//-1;//1425641876;
+    time_t stime = 1426931542;//-1;//1426923739;//1426605903;//1425904342;//-1;//1425813081;//-1;//1425746144;//-1;//1425641876;
 vector<b2Body *>/*pair<Points, vector<double> >*/ place(const Points &polygon, double edge_length) {
     assert(2 < polygon.size());
     const Points normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));

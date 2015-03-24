@@ -7,7 +7,7 @@ Points polygon, normalized_polygon;
 double edge_length = 100;
 vector<b2Body *>points;
 const int attention = -1;
-const int FRAMES_PER_SEC = 120;
+const int FRAMES_PER_SEC = 240;
 MainWidget::MainWidget(QWidget *parent) :
     QWidget(parent)
 {

@@ -27,6 +27,7 @@ LIBS += -lgmp -lCGAL -lCGAL_Core
 
 win32 {
     INCLUDEPATH += D:/
+    INCLUDEPATH += D:/Software/CGAL-4.5.2/include/
     LIBS += -L"D:/Box2D" -lBox2D
 }
 

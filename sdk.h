@@ -131,6 +131,10 @@ int calc_direction(const Point &c, const double arc, const Point &p) {
     return -1;
 }
 
+double calc_weight(const double dis, const double min_dis) {
+    return pow(dis / min_dis, -12);
+}
+
 double K, E = INT_MAX, pre_E, min_E = INT_MAX;
 int min_t = 0;
 int frame;
@@ -219,14 +223,12 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                        kt = 0.5 * p2_line_middle_t_length;
                 assert(0 <= v_n_length);
                 Vector r = 1 / v.Length() * v;
-                double weight = pow(v.Length() / min_distance, -2) + pow((p1_line_middle - p2_line_middle).Length() + 0.1, -2);
+                double weight = /*calc_weight(v.Length(), min_distance) + */calc_weight(min_distance, 2) + calc_weight(v.Length(), 2);//pow(v.Length() / min_distance, -2) + pow((p1_line_middle - p2_line_middle).Length() + 0.1, -2);
                 force[i] += weight * (kr * r + kt * t);
                 angle[i] += 0.5 * ang_diff * weight;
                 weight_sum += weight;
-                K = min(K, v.Length() / min_distance);
                 if ((p1_line_middle - p2_line_middle).Length() < 0.15)
                     del_rank.back().first.first += 10;
-                del_rank.back().first.second -= max(0.0, 1 - v.Length() / min_distance);
             }
         }
 
@@ -256,12 +258,14 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
                    kt = 0.5 * p2_line_middle_t_length;
             assert(0 <= v_n_length);
             Vector r = 1 / v.Length() * v;
-            double weight = pow(v.Length() / min_distance, -2) + pow((p1_line_middle - p2_line_middle).Length() + 0.1, -2);
+//            double weight = pow(v.Length() / min_distance, -2) + pow((p1_line_middle - p2_line_middle).Length() + 0.1, -2);
 //            force[i] += weight * (kr * r);
 //            weight_sum += weight;
 //            K = min(K, v.Length() / min_distance);
 //            del_rank.back().first.second -= max(0.0, 1 - v.Length() / min_distance);
             E += max(0.0, 1 / (v.Length() / min_distance) - 1);
+            K = min(K, v.Length() / min_distance);
+            del_rank.back().first.second -= max(0.0, 1 - v.Length() / min_distance);
         }
 
         for (int j = 0; j < normalized_polygon.size(); j++) {
@@ -346,7 +350,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
             if (0 < kn)
                 continue;
             assert(ZERO < abs(n.Normalize()));
-            double weight = pow(min_dist + 0.2, -2);
+            double weight = calc_weight(min_distance, /*min_distance*/1) + calc_weight(dis, 1);//pow(min_dist + 0.2, -2);
             force[i] -= weight * kn * n;
             angle[i] += ang_diff * weight;
             weight_sum += weight;
@@ -371,9 +375,12 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
     }
 
     sort(del_rank.begin(), del_rank.end());
+    double sum = 0;
+    for (int i = 0; i < del_rank.size(); i++)
+        sum += del_rank[i].first.second;
     int del = -1;
     for (int i = 0; i < del_rank.size() && del == -1; i++)
-        if (ZERO < abs(del_rank[i].first.second))
+        if (abs(sum / del_rank.size()) <= abs(del_rank[i].first.second))
             del = del_rank[i].second;
     static pair<int, int> pre_del(-1, 0);
     if (pre_del.first == del)
@@ -395,7 +402,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
         min_t++;
     min_E = min(min_E, E);
     pause_time += exp(1 - E / pre_E) < (double)rand() / RAND_MAX;
-    if (frame > INT_MAX && frame--)
+    if ((K > 0.95||frame > 60000)&&INT_MAX && frame--)
         for (int i = 0; i < points.size(); i++) {
             b2Body *p = points[i];
             p->SetLinearVelocity(Vector(0, 0));
@@ -419,7 +426,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
 }
 
     const int xxx = -1;//10;
-    time_t stime = 1426931542;//-1;//1426923739;//1426605903;//1425904342;//-1;//1425813081;//-1;//1425746144;//-1;//1425641876;
+    time_t stime = -1;//1427024809;//-1;//1427015316;//-1;//1426931542;//-1;//1426923739;//1426605903;//1425904342;//-1;//1425813081;//-1;//1425746144;//-1;//1425641876;
 vector<b2Body *>/*pair<Points, vector<double> >*/ place(const Points &polygon, double edge_length) {
     assert(2 < polygon.size());
     const Points normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));

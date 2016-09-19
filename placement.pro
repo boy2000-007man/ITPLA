@@ -11,18 +11,17 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 TARGET = placement
 TEMPLATE = app
 
-
 SOURCES += main.cpp\
         mainwindow.cpp \
-    mainwidget.cpp
+        mainwidget.cpp
 
 HEADERS  += mainwindow.h \
-    sdk.h \
-    mainwidget.h
+        mainwidget.h \
+    ITPLA.h
 
 FORMS    += mainwindow.ui
 
-QMAKE_CXXFLAGS += -frounding-math
+QMAKE_CXXFLAGS += -std=c++11 -O2 -frounding-math
 LIBS += -lgmp -lCGAL -lCGAL_Core
 
 win32 {
@@ -32,6 +31,6 @@ win32 {
 }
 
 unix:!macx {
-    INCLUDEPATH += /mnt/Zero_Software
-    LIBS += -L"/mnt/Zero_Software/Box2D" -lBox2D
+    INCLUDEPATH += /mnt/Zero_Data
+    LIBS += -L"/mnt/Zero_Data/Box2D" -lBox2D
 }

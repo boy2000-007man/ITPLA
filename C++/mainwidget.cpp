@@ -1,13 +1,56 @@
 #include "mainwidget.h"
 #include <QPainter>
 #include <QTimer>
+#include <QThread>
+#include <QMutex>
 #include "ITPLA.h"
 using namespace ITPLA;
 Points polygon, normalized_polygon;
 double edge_length;
 vector<b2Body *> points;
 const int attention = -1;
-const int FRAMES_PER_SEC = 240;
+const int FRAMES_PER_SEC = 60;
+
+class placement_thread : public QThread {
+//    Q_OBJECT
+signals:
+public:
+    QMutex lock;
+    struct {
+        int status = 0;
+        std::pair<Points, std::vector<double> > ttt;
+        Vectors vel;
+        double K, E;
+    } buffer[3];
+    void run() {
+        for (;;) {
+            ITPLA::calc_next_step(normalized_polygon, points);
+            points.back()->GetWorld()->Step(1.0 / FRAMES_PER_SEC, 6, 2);
+            lock.lock();
+            int writing = 0;
+            while (writing < 2 && buffer[writing].status != 1)
+                writing++;
+            int idle = 0;
+            while (idle < 2 && buffer[idle].status)
+                idle++;
+            buffer[writing].status = 0;
+            buffer[idle].status = 1;
+            lock.unlock();
+            buffer[idle].ttt.first.clear();
+            buffer[idle].ttt.second.clear();
+            buffer[idle].vel.clear();
+            for (int i = 0; i < points.size(); i++) {
+                buffer[idle].ttt.first.push_back(ITPLA::normalize_point(points[i]->GetPosition(), sqrt(3) / edge_length));
+                //        printf("%lf,%lf\n",points[i]->GetAngle(),points[i]->GetPosition().y);
+                buffer[idle].ttt.second.push_back(to_deg(points[i]->GetAngle()));
+                buffer[idle].vel.push_back(ITPLA::normalize_point(points[i]->GetLinearVelocity(), sqrt(3) / edge_length));
+            }
+            buffer[idle].K = ITPLA::K;
+            buffer[idle].E = ITPLA::E;
+        }
+    }
+} pt;
+
 MainWidget::MainWidget(QWidget *parent) :
     QWidget(parent)
 {
@@ -16,37 +59,41 @@ MainWidget::MainWidget(QWidget *parent) :
     for (Point p: polygon)
         cout << p.x << "|" << p.y << endl;
 
-    edge_length = 158.88;
-    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_1.csv");//tr1_1;
-    for (int i = 0; i < polygon.size()/2; i++)
-        swap(polygon[i], polygon[polygon.size()-1-i]);
+    edge_length = 99.9533;
+    polygon = LH;
 
-    edge_length = 63.17796;//110.204;
-    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_2.csv");//tr1_2;
-    for (int i = 1; i < polygon.size(); i++)
-        polygon[i] = {polygon[i-1].x+polygon[i].x, polygon[i-1].y+polygon[i].y};
-    for (int i = 0; i < polygon.size()/2; i++)
-        swap(polygon[i], polygon[polygon.size()-1-i]);
-
-    edge_length = 85.86865;//110.204;
-    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_4.csv");//tr1_4;
-    for (int i = 1; i < polygon.size(); i++)
-        polygon[i] = {polygon[i-1].x+polygon[i].x, polygon[i-1].y+polygon[i].y};
-    for (int i = 0; i < polygon.size()/2; i++)
-        swap(polygon[i], polygon[polygon.size()-1-i]);
-
-    edge_length = 68.983385775;//110.204;
-    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_5.csv");//tr1_5;
-    for (int i = 1; i < polygon.size(); i++)
-        polygon[i] = {polygon[i-1].x+polygon[i].x, polygon[i-1].y+polygon[i].y};
-    for (int i = 0; i < polygon.size()/2; i++)
-        swap(polygon[i], polygon[polygon.size()-1-i]);
+//    edge_length = 158.88;
+//    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_1.csv");//tr1_1;
+//    for (int i = 0; i < polygon.size()/2; i++)
+//        swap(polygon[i], polygon[polygon.size()-1-i]);
+//
+//    edge_length = 63.17796;//110.204;
+//    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_2.csv");//tr1_2;
+//    for (int i = 1; i < polygon.size(); i++)
+//        polygon[i] = {polygon[i-1].x+polygon[i].x, polygon[i-1].y+polygon[i].y};
+//    for (int i = 0; i < polygon.size()/2; i++)
+//        swap(polygon[i], polygon[polygon.size()-1-i]);
+//
+//    edge_length = 85.86865;//110.204;
+//    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_4.csv");//tr1_4;
+//    for (int i = 1; i < polygon.size(); i++)
+//        polygon[i] = {polygon[i-1].x+polygon[i].x, polygon[i-1].y+polygon[i].y};
+//    for (int i = 0; i < polygon.size()/2; i++)
+//        swap(polygon[i], polygon[polygon.size()-1-i]);
+//
+//    edge_length = 68.983385775;//110.204;
+//    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_5.csv");//tr1_5;
+//    for (int i = 1; i < polygon.size(); i++)
+//        polygon[i] = {polygon[i-1].x+polygon[i].x, polygon[i-1].y+polygon[i].y};
+//    for (int i = 0; i < polygon.size()/2; i++)
+//        swap(polygon[i], polygon[polygon.size()-1-i]);
 
     normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));
     points = place(polygon, edge_length);
     QTimer *timer = new QTimer();
     timer->start(1000.0 / FRAMES_PER_SEC);
     connect(timer, SIGNAL(timeout()), this, SLOT(repaint()));
+    pt.start();
 //    pair<Points, vector<double> > t = place(tmp, edge_length);
 //    res = t.first;
 //    ang = t.second;
@@ -119,13 +166,30 @@ void paint(QPaintDevice *qpd) {
 }
 
 void MainWidget::paintEvent(QPaintEvent *) {
-    if (frame % 1000 == 0) {
-        QPixmap qi(this->width(), this->height());
-        paint(&qi);
-        qi.save(QString().sprintf("/home/zero/%d.bmp", frame));
-    }
+//    if (frame % 1000 == 0) {
+//        QPixmap qi(this->width(), this->height());
+//        paint(&qi);
+//        qi.save(QString().sprintf("/home/zero/%d.bmp", frame));
+//    }
     QPainter painter(this);
 
+#if 1
+    pt.lock.lock();
+    int reading = 0;
+    while (reading < 2 && pt.buffer[reading].status != -1)
+        reading++;
+    int idle = 0;
+    while (idle < 2 && pt.buffer[idle].status)
+        idle++;
+    pt.buffer[reading].status = 0;
+    pt.buffer[idle].status = -1;
+    pt.lock.unlock();
+
+    pair<Points, vector<double> > &ttt = pt.buffer[idle].ttt;
+    Vectors &vel = pt.buffer[idle].vel;
+    double K = pt.buffer[idle].K,
+            E = pt.buffer[idle].E;
+#else
     pair<Points, vector<double> > ttt;
     Vectors vel;
     for (int i = 0; i < points.size(); i++) {
@@ -135,19 +199,20 @@ void MainWidget::paintEvent(QPaintEvent *) {
         vel.push_back(normalize_point(points[i]->GetLinearVelocity(), sqrt(3) / edge_length));
     }
     calc_next_step(normalized_polygon, points);
+    //    if (time++ < 120)
+            points.back()->GetWorld()->Step(1.0 / 60, 6, 2);
+#endif
     painter.setPen(Qt::black);
     painter.drawText(
                 0,
                 320,
-                QString().sprintf("Point:%d,Frame:%6d,Time:%8.3lfs,K:%.6lf", points.size(), frame, 1.0*frame/FRAMES_PER_SEC, ITPLA::K)
+                QString().sprintf("Point:%d,Frame:%6d,Time:%8.3lfs,K:%.6lf", vel.size(), frame, 1.0*frame/FRAMES_PER_SEC, K)
     );
     painter.drawText(
                 0,
                 335,
-                QString().sprintf("E:%.6lf,T:%.6lf", ITPLA::E, ITPLA::E / points.size())
+                QString().sprintf("E:%.6lf,T:%.6lf", E, E / vel.size())
     );
-//    if (time++ < 120)
-        points.back()->GetWorld()->Step(1.0 / 60, 6, 2);
     Points res = ttt.first;
     vector<double> ang = ttt.second;
     //painter.translate(10, 10);
@@ -176,7 +241,7 @@ void MainWidget::paintEvent(QPaintEvent *) {
         painter.drawLine(p.x, p.y, p.x + r * sin(a + 2 * ttt), p.y + r * cos(a + 2 * ttt));
     }
     painter.setPen(Qt::black);
-    for (int i = 0; i < points.size(); i++) {
+    for (int i = 0; i < res.size(); i++) {
         const Point &p = res[i];
         const Vector &v = vel[i];
         painter.drawLine(p.x, p.y, p.x + v.x, p.y + v.y);

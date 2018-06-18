@@ -21,16 +21,27 @@ HEADERS  += mainwindow.h \
 
 FORMS    += mainwindow.ui
 
-QMAKE_CXXFLAGS += -std=c++11 -O2 -frounding-math
-LIBS += -lgmp -lCGAL -lCGAL_Core
-
 win32 {
-    INCLUDEPATH += D:/
+    QMAKE_CXXFLAGS += -std=c++11 -O2 -frounding-math
     INCLUDEPATH += D:/Software/CGAL-4.5.2/include/
+    LIBS += -lCGAL -lCGAL_Core -lgmp
+    INCLUDEPATH += D:/
     LIBS += -L"D:/Box2D" -lBox2D
 }
 
 unix:!macx {
+    QMAKE_CXXFLAGS += -std=c++11 -O2 -frounding-math
+    LIBS += -lCGAL -lCGAL_Core -lgmp
     INCLUDEPATH += /mnt/Zero_Data
     LIBS += -L"/mnt/Zero_Data/Box2D" -lBox2D
+}
+
+macx {
+    QMAKE_CXXFLAGS += -O2
+    CONFIG += c++11
+    INCLUDEPATH += /usr/local/include/
+    LIBS += -lgmp
+    LIBS += -L"/usr/local/lib" -lcgal -lcgal_Core
+    INCLUDEPATH += /Users/zero/Projects/Box2D-master
+    LIBS += -L"/Users/zero/Projects/Box2D-master/Box2D" -lBox2D
 }

@@ -15,6 +15,7 @@ class placement_thread : public QThread {
 //    Q_OBJECT
 signals:
 public:
+    bool status = false;
     QMutex lock;
     struct {
         int status = 0;
@@ -23,7 +24,7 @@ public:
         double K, E;
     } buffer[3];
     void run() {
-        for (;;) {
+        while (status) {
             ITPLA::calc_next_step(normalized_polygon, points);
             points.back()->GetWorld()->Step(1.0 / FRAMES_PER_SEC, 6, 2);
             lock.lock();
@@ -49,7 +50,7 @@ public:
             buffer[idle].E = ITPLA::E;
         }
     }
-} pt;
+} *pt;
 
 MainWidget::MainWidget(QWidget *parent) :
     QWidget(parent)
@@ -93,7 +94,9 @@ MainWidget::MainWidget(QWidget *parent) :
     QTimer *timer = new QTimer();
     timer->start(1000.0 / FRAMES_PER_SEC);
     connect(timer, SIGNAL(timeout()), this, SLOT(repaint()));
-    pt.start();
+    pt = new placement_thread();
+    pt->status = true;
+    pt->start();
 //    pair<Points, vector<double> > t = place(tmp, edge_length);
 //    res = t.first;
 //    ang = t.second;
@@ -174,21 +177,21 @@ void MainWidget::paintEvent(QPaintEvent *) {
     QPainter painter(this);
 
 #if 1
-    pt.lock.lock();
+    pt->lock.lock();
     int reading = 0;
-    while (reading < 2 && pt.buffer[reading].status != -1)
+    while (reading < 2 && pt->buffer[reading].status != -1)
         reading++;
     int idle = 0;
-    while (idle < 2 && pt.buffer[idle].status)
+    while (idle < 2 && pt->buffer[idle].status)
         idle++;
-    pt.buffer[reading].status = 0;
-    pt.buffer[idle].status = -1;
-    pt.lock.unlock();
+    pt->buffer[reading].status = 0;
+    pt->buffer[idle].status = -1;
+    pt->lock.unlock();
 
-    pair<Points, vector<double> > &ttt = pt.buffer[idle].ttt;
-    Vectors &vel = pt.buffer[idle].vel;
-    double K = pt.buffer[idle].K,
-            E = pt.buffer[idle].E;
+    pair<Points, vector<double> > &ttt = pt->buffer[idle].ttt;
+    Vectors &vel = pt->buffer[idle].vel;
+    double K = pt->buffer[idle].K,
+            E = pt->buffer[idle].E;
 #else
     pair<Points, vector<double> > ttt;
     Vectors vel;
@@ -272,4 +275,10 @@ void MainWidget::paintEvent(QPaintEvent *) {
     painter.setPen(Qt::white);
     for (int i = 0; i < res.size(); i++)
         painter.drawRect(res[i].x - 1, res[i].y - 1, 2, 2);
+}
+
+MainWidget::~MainWidget() {
+    pt->status = false;
+    while (pt->isRunning());
+    delete pt;
 }

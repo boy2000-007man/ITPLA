@@ -214,7 +214,7 @@ void MainWidget::paintEvent(QPaintEvent *) {
     painter.drawText(
                 0,
                 335,
-                QString().sprintf("E:%.6lf,T:%.6lf", E, E / vel.size())
+                QString().sprintf("E:%.6lf,avg E:%.6lf", E, E / vel.size())
     );
     Points res = ttt.first;
     vector<double> ang = ttt.second;

@@ -326,7 +326,7 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
         for (int j = 0; j < normalized_polygon.size(); j++) {
             const Point &s1 = normalized_polygon[j],
                         &s2 = normalized_polygon[(j + 1) % normalized_polygon.size()];
-            if (intersect_each(p1->GetPosition(), p1->GetAngle(), s1, s2))
+            if (intersect_each(p1->GetPosition(), to_deg(p1->GetAngle()), s1, s2))
                 overlap_edge[i].push_back(j);
         }
     }

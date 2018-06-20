@@ -55,41 +55,29 @@ public:
 } *pt;
 
 MainWidget::MainWidget(QWidget *parent) :
-    QWidget(parent)
-{
+    QWidget(parent) {
+//    edge_length = 63.17796;
+//    polygon = tr1_2;
+
+//    edge_length = 85.86865;
+//    polygon = tr1_4;
+
+//    edge_length = 68.983385775;
+//    polygon = tr1_5;
+    for (int i = 1; i < polygon.size(); i++)
+        polygon[i] = {polygon[i-1].x+polygon[i].x, polygon[i-1].y+polygon[i].y};
+
+    edge_length = 158.88;
+    polygon = tr1_1;
+
+    for (int i = 0; i < polygon.size()/2; i++)
+        swap(polygon[i], polygon[polygon.size()-1-i]);
+
     edge_length = 100;
-    polygon = read("/mnt/Zero_Data/zero/workspace/placement/test.csv");//test;
-    for (Point p: polygon)
-        cout << p.x << "|" << p.y << endl;
+    polygon = test;
 
     edge_length = 99.9533;
     polygon = LH;
-
-//    edge_length = 158.88;
-//    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_1.csv");//tr1_1;
-//    for (int i = 0; i < polygon.size()/2; i++)
-//        swap(polygon[i], polygon[polygon.size()-1-i]);
-//
-//    edge_length = 63.17796;//110.204;
-//    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_2.csv");//tr1_2;
-//    for (int i = 1; i < polygon.size(); i++)
-//        polygon[i] = {polygon[i-1].x+polygon[i].x, polygon[i-1].y+polygon[i].y};
-//    for (int i = 0; i < polygon.size()/2; i++)
-//        swap(polygon[i], polygon[polygon.size()-1-i]);
-//
-//    edge_length = 85.86865;//110.204;
-//    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_4.csv");//tr1_4;
-//    for (int i = 1; i < polygon.size(); i++)
-//        polygon[i] = {polygon[i-1].x+polygon[i].x, polygon[i-1].y+polygon[i].y};
-//    for (int i = 0; i < polygon.size()/2; i++)
-//        swap(polygon[i], polygon[polygon.size()-1-i]);
-//
-//    edge_length = 68.983385775;//110.204;
-//    polygon = read("/mnt/Zero_Data/zero/workspace/placement/tr1_5.csv");//tr1_5;
-//    for (int i = 1; i < polygon.size(); i++)
-//        polygon[i] = {polygon[i-1].x+polygon[i].x, polygon[i-1].y+polygon[i].y};
-//    for (int i = 0; i < polygon.size()/2; i++)
-//        swap(polygon[i], polygon[polygon.size()-1-i]);
 
     normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));
     points = place(polygon, edge_length);

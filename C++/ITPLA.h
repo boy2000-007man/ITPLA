@@ -299,7 +299,8 @@ void load_status(const vector<b2Body *> &points, const Vectors &v, const vector<
     }
 }
 
-void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *> &points) {
+bool calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *> &points) {
+    bool ret = true;
     vector<vector<int> > nearest_point(points.size(), vector<int>(3, -1)),
                          overlap_module(points.size()),
                          overlap_edge(points.size());
@@ -530,7 +531,6 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
         show_time();
         cout << frame << endl;
     }
-    frame++;
     static int pause_time = 0;
     if (E < min_E) {
         min_t = 0;
@@ -552,25 +552,30 @@ void calc_next_step(const Points &normalized_polygon, /*const*/ vector<b2Body *>
 //            p->SetLinearVelocity(Vector(0, 0));
 //            p->SetAngularVelocity(0);
 //        }
-    if (pre_del.first != -1 && (pow(points.size(), 2) < pause_time || 120*60 < min_t) && K < 0.85) {
-        pre_del.second = 0;
-        pause_time = 0;
-        pre_E = INT_MAX;
-        min_E = INT_MAX;
-        min_t = 0;
-        points.back()->GetWorld()->DestroyBody(points[del]);
-        points[del] = points.back();
-        points.pop_back();
+    if (pre_del.first != -1 && (pow(points.size(), 2) < pause_time || 120*60 < min_t)) {
+        if (K < .85) {
+            pre_del.second = 0;
+            pause_time = 0;
+            pre_E = INT_MAX;
+            min_E = INT_MAX;
+            min_t = 0;
+            points.back()->GetWorld()->DestroyBody(points[del]);
+            points[del] = points.back();
+            points.pop_back();
+        } else
+            ret = false;
         for (int i = 0; i < points.size(); i++) {
             b2Body *p = points[i];
             p->SetLinearVelocity(Vector(0, 0));
             p->SetAngularVelocity(0);
         }
-    }
+    } else
+        frame++;
+    return ret;
 }
 
-    const int xxx = -1;//10;
-    time_t stime = 1427351926;//1427343294;//1427288939;//1427024809;//-1;//1427015316;//-1;//1426931542;//-1;//1426923739;//1426605903;//1425904342;//-1;//1425813081;//-1;//1425746144;//-1;//1425641876;
+const int xxx = -1;//10;
+time_t stime = -1;//1427351926;//1427343294;//1427288939;//1427024809;//-1;//1427015316;//-1;//1426931542;//-1;//1426923739;//1426605903;//1425904342;//-1;//1425813081;//-1;//1425746144;//-1;//1425641876;
 vector<b2Body *>/*pair<Points, vector<double> >*/ place(const Points &polygon, double edge_length) {
     assert(2 < polygon.size());
     const Points normalized_polygon = normalize_polygon(polygon, edge_length / sqrt(3));

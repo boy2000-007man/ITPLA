@@ -16,6 +16,7 @@ class placement_thread : public QThread {
 signals:
 public:
     bool status = false;
+    double run_time = 0;
     QMutex lock;
     struct {
         int status = 0;
@@ -24,8 +25,8 @@ public:
         double K, E;
     } buffer[3];
     void run() {
-        while (status) {
-            ITPLA::calc_next_step(normalized_polygon, points);
+        double start_time = clock() * 1.0 / CLOCKS_PER_SEC;
+        while (status && ITPLA::calc_next_step(normalized_polygon, points)) {
             points.back()->GetWorld()->Step(1.0 / FRAMES_PER_SEC, 6, 2);
             lock.lock();
             int writing = 0;
@@ -36,6 +37,7 @@ public:
                 idle++;
             buffer[writing].status = 0;
             buffer[idle].status = 1;
+            run_time = clock() * 1.0 / CLOCKS_PER_SEC - start_time;
             lock.unlock();
             buffer[idle].ttt.first.clear();
             buffer[idle].ttt.second.clear();
@@ -120,6 +122,11 @@ void paint(QPaintDevice *qpd) {
     painter.drawText(
                 0,
                 320,
+                QString().sprintf("Run Time:%8.3lfs", pt->run_time)
+    );
+    painter.drawText(
+                0,
+                335,
                 QString().sprintf("Point:%d,Frame:%6d,Time:%8.3lfs,K:%.6lf", points.size(), frame, 1.0*frame/FRAMES_PER_SEC, ITPLA::K)
     );
     Points res = ttt.first;
@@ -174,6 +181,13 @@ void MainWidget::paintEvent(QPaintEvent *) {
 //        paint(&qi);
 //        qi.save(QString().sprintf("/home/zero/%d.bmp", frame));
 //    }
+    static bool output = false;
+    if (!output && pt->isFinished()) {
+        QPixmap qi(this->width(), this->height());
+        paint(&qi);
+        qi.save(QString().sprintf("/Users/zero/%d.png", stime));
+        output = true;
+    }
     QPainter painter(this);
 
 #if 1
@@ -206,6 +220,11 @@ void MainWidget::paintEvent(QPaintEvent *) {
             points.back()->GetWorld()->Step(1.0 / 60, 6, 2);
 #endif
     painter.setPen(Qt::black);
+    painter.drawText(
+                0,
+                305,
+                QString().sprintf("Run Time:%8.3lfs", pt->run_time)
+    );
     painter.drawText(
                 0,
                 320,
